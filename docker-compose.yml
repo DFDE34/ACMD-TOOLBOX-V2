@@ -1,0 +1,138 @@
+version: '3.8'
+
+# ═══════════════════════════════════════════════════════════════
+#  ACMD Toolbox — Docker Compose
+#
+#  MODES RÉSEAU (choisissez selon votre usage) :
+#
+#  MODE A — Réseau hôte [ACTIF PAR DÉFAUT]
+#    → Cibles sur votre LAN, VMs, internet
+#    → network_mode: host
+#
+#  MODE B — Réseau isolé (lab Docker)
+#    → Cibles = autres conteneurs Docker (VMs vulnérables)
+#    → Commentez network_mode: host
+#    → Décommentez la section "networks" en bas
+#
+#  Démarrage : docker compose up -d --build
+#  Accès     : http://localhost:5000
+#  Logs      : docker compose logs -f
+#  Shell     : docker exec -it acmd-toolbox bash
+# ═══════════════════════════════════════════════════════════════
+
+services:
+
+  # ── Application principale ──────────────────────────────────
+  toolbox:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    container_name: acmd-toolbox
+    image: acmd-toolbox:latest
+
+    ports:
+      - "5000:5000"
+
+    # Base de données persistante entre les redémarrages
+    volumes:
+      - toolbox-data:/app/data
+      # Optionnel : accès aux wordlists de l'hôte
+      # - /usr/share/wordlists:/wordlists:ro
+
+    environment:
+      - DB_PATH=/app/data/toolbox.db
+      - FLASK_ENV=production
+
+    restart: unless-stopped
+
+    # ── MODE A : Réseau hôte (défaut) ────────────────────────
+    # Le conteneur partage la pile réseau de la machine hôte.
+    # Avantages :
+    #   ✓ Accès direct au LAN (192.168.x.x, 10.x.x.x...)
+    #   ✓ Scans nmap sur le réseau local sans configuration
+    #   ✓ Internet accessible (cibles en ligne)
+    #   ✓ VMs VirtualBox/VMware visibles si sur le même réseau
+    # Inconvénient :
+    #   ✗ Isolation réduite (conteneur = même réseau que l'hôte)
+    network_mode: host
+
+    # ── MODE B : Lab Docker isolé ─────────────────────────────
+    # Décommentez si vous utilisez des cibles Docker (DVWA, Metasploitable...)
+    # networks:
+    #   - pentest-lab
+
+    # Capacités réseau nécessaires pour nmap (raw sockets / SYN scan)
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    # Nécessaire pour les scans avancés nmap (-sS, -O, etc.)
+    privileged: false   # mettre 'true' si nmap -sS échoue encore
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/login"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+
+  # ════════════════════════════════════════════════════════════
+  #  CIBLES D'ENTRAÎNEMENT — Machines vulnérables (optionnel)
+  #  Décommentez les blocs qui vous intéressent.
+  #  Ces conteneurs sont accessibles depuis toolbox via leur nom
+  #  (ex: cible "dvwa" → http://dvwa ou 172.20.0.10)
+  # ════════════════════════════════════════════════════════════
+
+  # ── DVWA (Damn Vulnerable Web Application) ─────────────────
+  # dvwa:
+  #   image: vulnerables/web-dvwa:latest
+  #   container_name: cible-dvwa
+  #   networks:
+  #     pentest-lab:
+  #       ipv4_address: 172.20.0.10
+  #   restart: unless-stopped
+
+  # ── Metasploitable 2 ────────────────────────────────────────
+  # metasploitable:
+  #   image: tleemcjr/metasploitable2:latest
+  #   container_name: cible-metasploitable
+  #   networks:
+  #     pentest-lab:
+  #       ipv4_address: 172.20.0.20
+  #   restart: unless-stopped
+
+  # ── Juice Shop (OWASP) ──────────────────────────────────────
+  # juiceshop:
+  #   image: bkimminich/juice-shop:latest
+  #   container_name: cible-juiceshop
+  #   networks:
+  #     pentest-lab:
+  #       ipv4_address: 172.20.0.30
+  #   restart: unless-stopped
+
+  # ── VulnHub / HackTheBox style (Alpine simple) ──────────────
+  # cible-ssh:
+  #   image: rastasheep/ubuntu-sshd:18.04
+  #   container_name: cible-ssh
+  #   networks:
+  #     pentest-lab:
+  #       ipv4_address: 172.20.0.40
+  #   restart: unless-stopped
+
+
+# ── Volumes ─────────────────────────────────────────────────────
+volumes:
+  toolbox-data:
+    driver: local
+
+
+# ── Réseau lab isolé (MODE B) ───────────────────────────────────
+# Décommentez si vous utilisez les cibles Docker ci-dessus
+# networks:
+#   pentest-lab:
+#     driver: bridge
+#     ipam:
+#       config:
+#         - subnet: 172.20.0.0/24
+#           gateway: 172.20.0.1

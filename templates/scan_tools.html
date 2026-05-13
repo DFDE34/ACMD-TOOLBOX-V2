@@ -1,0 +1,469 @@
+{% extends 'base.html' %}
+{% block title %}Outils de Scan — ACMD Toolbox{% endblock %}
+{% block head %}
+<style>
+.tool-card { background:var(--bg3); border:1px solid var(--border); padding:1.2rem; transition:border-color 0.2s; position:relative; }
+.tool-card:hover { border-color:rgba(0,255,136,0.3); }
+.tool-card.builtin { border-left:3px solid var(--accent2); }
+.tool-card.custom  { border-left:3px solid var(--accent); }
+.tool-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(300px,1fr)); gap:1rem; }
+.tool-name { font-family:'Orbitron',monospace; font-size:0.85rem; color:var(--accent); font-weight:700; margin-bottom:0.3rem; }
+.tool-desc { font-family:'Rajdhani',sans-serif; font-size:0.9rem; color:var(--text-dim); margin-bottom:0.75rem; }
+.tool-meta { font-family:'Share Tech Mono',monospace; font-size:0.72rem; color:var(--text-dim); }
+.tool-meta span { color:var(--accent2); }
+.modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.85); display:flex; align-items:center; justify-content:center; z-index:1000; display:none; }
+.modal { background:var(--bg2); border:1px solid var(--border); padding:2rem; width:90%; max-width:550px; max-height:90vh; overflow-y:auto; position:relative; }
+.modal::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; background:linear-gradient(90deg,transparent,var(--accent),transparent); }
+.modal-title { font-family:'Orbitron',monospace; font-size:0.9rem; color:var(--accent); letter-spacing:3px; margin-bottom:1.5rem; }
+.form-group { margin-bottom:1rem; }
+.form-group label { display:block; font-family:'Share Tech Mono',monospace; font-size:0.72rem; color:var(--text-dim); letter-spacing:1px; margin-bottom:0.3rem; text-transform:uppercase; }
+.form-group input, .form-group select, .form-group textarea { margin-bottom:0; width:100%; }
+.hint { font-family:'Share Tech Mono',monospace; font-size:0.7rem; color:var(--text-dim); margin-top:0.25rem; }
+.hint.error { color:var(--accent3); }
+.badge-builtin { font-family:'Share Tech Mono',monospace; font-size:0.65rem; padding:2px 8px; border:1px solid var(--accent2); color:var(--accent2); }
+.badge-custom  { font-family:'Share Tech Mono',monospace; font-size:0.65rem; padding:2px 8px; border:1px solid var(--accent); color:var(--accent); }
+.toast { position:fixed; bottom:1.5rem; right:1.5rem; background:var(--bg2); border:1px solid var(--border); padding:0.75rem 1.25rem; font-family:'Share Tech Mono',monospace; font-size:0.8rem; z-index:2000; transform:translateX(120%); transition:transform 0.3s; }
+.toast.show { transform:translateX(0); }
+.toast.success { border-color:var(--accent); color:var(--accent); }
+.toast.error   { border-color:var(--accent3); color:var(--accent3); }
+.confirm-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.85); display:flex; align-items:center; justify-content:center; z-index:2000; display:none; }
+.confirm-box { background:var(--bg2); border:1px solid var(--accent3); padding:2rem; max-width:400px; width:90%; }
+</style>
+{% endblock %}
+{% block content %}
+
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;flex-wrap:wrap;gap:1rem;">
+    <div>
+        <h1 style="font-family:'Orbitron',monospace;font-size:1rem;letter-spacing:4px;color:var(--accent);font-weight:400;">// <span style="font-weight:900;">OUTILS DE SCAN</span></h1>
+        <p style="font-family:'Share Tech Mono',monospace;font-size:0.75rem;color:var(--text-dim);">Gérez et créez vos outils de reconnaissance</p>
+    </div>
+    <button class="btn" onclick="openCreate()">+ Créer un outil</button>
+</div>
+
+<!-- How it works -->
+<div style="margin-bottom:1.5rem;">
+    <!-- Outils intégrés -->
+    <div style="background:rgba(0,204,255,0.05);border:1px solid rgba(0,204,255,0.2);padding:1rem 1.25rem;margin-bottom:0.75rem;">
+        <div style="font-family:'Orbitron',monospace;font-size:0.72rem;color:var(--accent2);letter-spacing:2px;margin-bottom:0.6rem;">ℹ OUTILS INTÉGRÉS — Python pur (toujours disponibles)</div>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:0.78rem;color:var(--text-dim);display:grid;grid-template-columns:1fr 1fr;gap:0.3rem;">
+            <span><span style="color:var(--accent2);">Port Scanner</span> — scan TCP multi-thread, jusqu'à 100 ports, plages (ex: 80-100)</span>
+            <span><span style="color:var(--accent2);">DNS Lookup</span> — résolution A + reverse DNS</span>
+            <span><span style="color:var(--accent2);">IP Analyser</span> — IPv4/v6, classe, binaire, hex</span>
+            <span><span style="color:var(--accent2);">Subnet Calc</span> — CIDR complet, liste des hôtes</span>
+        </div>
+    </div>
+    <!-- Outils custom -->
+    <div style="background:rgba(0,255,136,0.03);border:1px solid rgba(0,255,136,0.2);padding:1rem 1.25rem;">
+        <div style="font-family:'Orbitron',monospace;font-size:0.72rem;color:var(--accent);letter-spacing:2px;margin-bottom:0.75rem;">⚙ OUTILS CUSTOM — Exécution shell réelle sur votre machine</div>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:0.78rem;color:var(--text-dim);line-height:1.8;">
+            <div style="margin-bottom:0.5rem;">Le champ <span style="color:var(--accent);">Commande</span> est exécuté directement en shell. Deux modes :</div>
+
+            <div style="background:var(--bg3);border:1px solid var(--border);padding:0.75rem;margin-bottom:0.5rem;">
+                <div style="color:var(--accent2);font-size:0.7rem;margin-bottom:0.3rem;">MODE 1 — Commande avec <span style="color:var(--accent);">{target}</span> (substitution explicite)</div>
+                <div style="color:var(--text-dim);font-size:0.72rem;margin-bottom:0.4rem;">Utilisez <code style="color:var(--accent);">{target}</code> là où la cible doit apparaître.</div>
+                <div><span style="color:var(--text-dim);">Commande :</span> <span style="color:var(--accent);">nmap -sV -O {target}</span></div>
+                <div><span style="color:var(--text-dim);">Options   :</span> <span style="color:var(--accent);">-p 80,443</span></div>
+                <div><span style="color:var(--text-dim);">Exécuté   :</span> <span style="color:var(--accent2);">nmap -sV -O 192.168.1.1 -p 80,443</span></div>
+            </div>
+
+            <div style="background:var(--bg3);border:1px solid var(--border);padding:0.75rem;margin-bottom:0.75rem;">
+                <div style="color:var(--accent2);font-size:0.7rem;margin-bottom:0.3rem;">MODE 2 — Exécutable seul (cible ajoutée automatiquement)</div>
+                <div style="color:var(--text-dim);font-size:0.72rem;margin-bottom:0.4rem;">La cible est insérée juste après le nom de la commande.</div>
+                <div><span style="color:var(--text-dim);">Commande :</span> <span style="color:var(--accent);">nikto -h</span></div>
+                <div><span style="color:var(--text-dim);">Options   :</span> <span style="color:var(--accent);">-Tuning 1</span></div>
+                <div><span style="color:var(--text-dim);">Exécuté   :</span> <span style="color:var(--accent2);">nikto -h 192.168.1.1 -Tuning 1</span></div>
+            </div>
+
+            <div style="color:var(--accent3);font-size:0.75rem;">⚠ Si l'outil n'est pas installé sur votre machine, le scan affichera les instructions d'installation. Timeout automatique à 60 secondes.</div>
+
+            <div style="margin-top:0.6rem;color:var(--text-dim);font-size:0.75rem;">
+                Exemples d'outils courants :
+                <span style="color:var(--accent);">nmap</span> ·
+                <span style="color:var(--accent);">nikto -h {target}</span> ·
+                <span style="color:var(--accent);">gobuster dir -u http://{target}</span> ·
+                <span style="color:var(--accent);">sqlmap -u http://{target}</span> ·
+                <span style="color:var(--accent);">curl -I http://{target}</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="tool-grid" id="tools-grid">
+{% for tool in tools %}
+<div class="tool-card {{ 'builtin' if tool.is_builtin else 'custom' }}" id="tool-card-{{ tool.id }}">
+    <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:0.5rem;">
+        <div class="tool-name">{{ tool.name }}</div>
+        <span class="{{ 'badge-builtin' if tool.is_builtin else 'badge-custom' }}">{{ 'intégré' if tool.is_builtin else 'custom' }}</span>
+    </div>
+    <div class="tool-desc">{{ tool.description or 'Aucune description.' }}</div>
+    <div class="tool-meta">
+        CMD : <span>{{ tool.command }}</span>
+        {% if tool.default_options %}<br>Options : <span>{{ tool.default_options }}</span>{% endif %}
+        <br>Catégorie : <span>{{ tool.category }}</span>
+    </div>
+    {% if not tool.is_builtin %}
+    <div style="display:flex;gap:0.5rem;margin-top:1rem;">
+        <button class="btn btn-blue" onclick="openEdit({{ tool.id }}, '{{ tool.name|e }}', '{{ tool.description|e }}', '{{ tool.command|e }}', '{{ tool.default_options|e }}', '{{ tool.category|e }}')" style="font-size:0.75rem;padding:4px 12px;">Modifier</button>
+        <button class="btn btn-red" onclick="askDelete({{ tool.id }}, '{{ tool.name|e }}')" style="font-size:0.75rem;padding:4px 12px;">Supprimer</button>
+    </div>
+    {% endif %}
+</div>
+{% endfor %}
+</div>
+
+<!-- Create/Edit Modal -->
+<div class="modal-overlay" id="modal-overlay">
+<div class="modal">
+    <div class="modal-title" id="modal-title">CRÉER UN OUTIL</div>
+    <input type="hidden" id="edit-id" value="">
+    <div class="form-group">
+        <label>Nom de l'outil <span style="color:var(--accent3)">*</span></label>
+        <input id="f-name" placeholder="ex: Nikto Scanner" oninput="validateName()">
+        <div class="hint" id="hint-name">Lettres, chiffres, tirets, espaces. 2-50 caractères.</div>
+    </div>
+    <div class="form-group">
+        <label>Description</label>
+        <textarea id="f-desc" rows="2" placeholder="Décrivez l'utilité de cet outil..."></textarea>
+    </div>
+    <div class="form-group">
+        <label>Commande / Identifiant <span style="color:var(--accent3)">*</span></label>
+        <input id="f-command" placeholder="ex: nmap -sV {target}" oninput="checkToolAvailability()">
+        <div class="hint" id="hint-cmd">Tapez votre commande — vérification de disponibilité automatique.</div>
+    </div>
+    <div class="form-group">
+        <label>Options par défaut</label>
+        <input id="f-options" placeholder="ex: -Tuning 1 -host">
+    </div>
+    <div class="form-group">
+        <label>Catégorie</label>
+        <select id="f-category">
+            <option value="réseau">Réseau</option>
+            <option value="web">Web</option>
+            <option value="osint">OSINT</option>
+            <option value="exploit">Exploit</option>
+            <option value="custom" selected>Custom</option>
+        </select>
+    </div>
+    <div style="display:flex;gap:0.75rem;margin-top:1.5rem;">
+        <button class="btn" id="modal-save" id="modal-save" onclick="saveTool()">Enregistrer</button>
+        <button class="btn btn-red" onclick="closeModal()">Annuler</button>
+    </div>
+</div>
+</div>
+
+<!-- Confirm delete -->
+<div class="confirm-overlay" id="confirm-overlay">
+<div class="confirm-box">
+    <div style="font-family:'Orbitron',monospace;font-size:0.9rem;color:var(--accent3);margin-bottom:1rem;">⚠ SUPPRESSION</div>
+    <p style="font-family:'Share Tech Mono',monospace;font-size:0.85rem;color:var(--text);margin-bottom:0.5rem;" id="confirm-msg">Êtes-vous sûr ?</p>
+    <p style="font-family:'Share Tech Mono',monospace;font-size:0.75rem;color:var(--text-dim);margin-bottom:1.5rem;">Les workflows utilisant cet outil seront impactés. Action irréversible.</p>
+    <div style="display:flex;gap:0.75rem;">
+        <button class="btn btn-red" id="confirm-yes">Supprimer</button>
+        <button class="btn" onclick="closeConfirm()">Annuler</button>
+    </div>
+</div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+
+<!-- ── Modal confirmation installation ──────────────────────────────────── -->
+<div class="modal-overlay" id="install-overlay">
+<div class="modal" style="max-width:480px;">
+    <div class="modal-title" id="install-modal-title">INSTALLATION REQUISE</div>
+
+    <!-- Paquet inconnu : demander le nom -->
+    <div id="install-pkg-section">
+        <div style="font-family:'Share Tech Mono',monospace;font-size:0.82rem;color:var(--text-dim);margin-bottom:0.5rem;">
+            L'exécutable <span id="install-exe" style="color:var(--accent);"></span> n'est pas dans notre liste de paquets connus.
+        </div>
+        <div class="form-group">
+            <label>Nom du paquet apt <span style="color:var(--accent3)">*</span></label>
+            <input id="install-pkg-input" placeholder="ex: nmap, dnsutils, gobuster" oninput="validatePkgName()">
+            <div id="hint-pkg" style="font-family:'Share Tech Mono',monospace;font-size:0.7rem;color:var(--text-dim);margin-top:0.25rem;">
+                Entrez le nom exact du paquet apt à installer.
+            </div>
+        </div>
+    </div>
+
+    <!-- Toujours : mot de passe sudo -->
+    <div id="install-sudo-section">
+        <div style="background:rgba(255,51,102,0.05);border:1px solid rgba(255,51,102,0.2);padding:0.6rem 0.9rem;margin-bottom:0.9rem;font-family:'Share Tech Mono',monospace;font-size:0.75rem;color:var(--accent3);">
+            🔒 Le mot de passe sudo est requis pour chaque installation et ne sera pas stocké.
+        </div>
+        <div class="form-group">
+            <label>Mot de passe sudo</label>
+            <input type="password" id="install-sudo-pw" placeholder="Votre mot de passe sudo..." autocomplete="new-password">
+            <div style="font-family:'Share Tech Mono',monospace;font-size:0.7rem;color:var(--text-dim);margin-top:0.25rem;">
+                Laissez vide si Flask tourne déjà en root.
+            </div>
+        </div>
+    </div>
+
+    <div id="install-progress-inline" style="display:none;margin-bottom:1rem;">
+        <div style="background:var(--bg3);border:1px solid var(--border);padding:0.75rem;font-family:'Share Tech Mono',monospace;font-size:0.8rem;color:var(--accent2);">
+            <span id="install-progress-txt"></span>
+        </div>
+    </div>
+
+    <div style="display:flex;gap:0.75rem;" id="install-action-btns">
+        <button class="btn" id="install-confirm-btn" onclick="confirmInstall()">Installer</button>
+        <button class="btn btn-red" onclick="skipInstall()">Ignorer</button>
+    </div>
+    <div style="font-family:'Share Tech Mono',monospace;font-size:0.72rem;color:var(--text-dim);margin-top:0.75rem;">
+        ℹ Ignorer crée quand même l'outil — vous pourrez l'installer manuellement plus tard.
+    </div>
+</div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<style>
+@keyframes spin { to { transform: rotate(360deg); } }
+.spinner-sm { display:inline-block;width:10px;height:10px;border:2px solid rgba(0,255,136,0.2);border-top-color:var(--accent);border-radius:50%;animation:spin 0.6s linear infinite;vertical-align:middle;margin-right:6px; }
+</style>
+
+<script>
+// ── State ─────────────────────────────────────────────────────────────────
+let pendingToolId   = null;   // ID de l'outil créé, en attente d'install
+let pendingExe      = null;   // nom de l'exécutable
+let pendingPkg      = null;   // paquet suggéré (null si inconnu)
+let pendingKnown    = false;  // true = dans APT_PACKAGES
+
+// ── Toast ─────────────────────────────────────────────────────────────────
+function showToast(msg, type='success') {
+    const t = document.getElementById('toast');
+    t.textContent = msg; t.className = `toast ${type} show`;
+    setTimeout(() => t.className = 'toast', 4000);
+}
+
+// ── Validation nom ────────────────────────────────────────────────────────
+function validateName() {
+    const val  = document.getElementById('f-name').value;
+    const hint = document.getElementById('hint-name');
+    const ok   = /^[a-zA-Z0-9\-_ ]{2,50}$/.test(val);
+    hint.textContent  = ok ? '✓ Nom valide' : 'Lettres, chiffres, tirets, espaces. 2-50 caractères.';
+    hint.style.color  = ok ? 'var(--accent)' : 'var(--text-dim)';
+    return ok;
+}
+
+function validatePkgName() {
+    const val  = document.getElementById('install-pkg-input').value.trim();
+    const hint = document.getElementById('hint-pkg');
+    const ok   = /^[a-zA-Z0-9\-_.+]{1,80}$/.test(val);
+    hint.textContent = ok ? '✓ Nom de paquet valide' : 'Caractères autorisés : lettres, chiffres, - _ . +';
+    hint.style.color = ok ? 'var(--accent)' : 'var(--accent3)';
+    document.getElementById('install-confirm-btn').disabled = !ok;
+    return ok;
+}
+
+// ── Vérification disponibilité en temps réel ──────────────────────────────
+let checkTimer = null;
+async function checkToolAvailability() {
+    clearTimeout(checkTimer);
+    const command = document.getElementById('f-command').value.trim();
+    const hint    = document.getElementById('hint-cmd');
+    if (!command) { hint.textContent = 'Tapez votre commande — vérification automatique.'; hint.style.color='var(--text-dim)'; return; }
+    if (document.getElementById('edit-id').value) return;   // pas en mode edit
+    hint.innerHTML = '<span class="spinner-sm"></span>Vérification...'; hint.style.color = 'var(--accent2)';
+    checkTimer = setTimeout(async () => {
+        const res = await fetch('/api/check-tool', {
+            method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({command})
+        });
+        const d = await res.json();
+        if (d.available) {
+            hint.innerHTML = `✓ "${d.executable}" est installé et prêt.`;
+            hint.style.color = 'var(--accent)';
+        } else if (d.known) {
+            hint.innerHTML = `⚠ "${d.executable}" absent — paquet connu : <strong style="color:var(--accent)">${d.package}</strong>. Sera installé avec confirmation.`;
+            hint.style.color = 'var(--accent3)';
+        } else {
+            hint.innerHTML = `⚠ "${d.executable}" absent et paquet inconnu — vous devrez spécifier le nom du paquet apt.`;
+            hint.style.color = 'var(--accent3)';
+        }
+    }, 500);
+}
+
+// ── Ouvrir / fermer modal création ───────────────────────────────────────
+function openCreate() {
+    document.getElementById('edit-id').value = '';
+    document.getElementById('modal-title').textContent = 'CRÉER UN OUTIL';
+    ['f-name','f-desc','f-command','f-options'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('f-category').value = 'custom';
+    const hint = document.getElementById('hint-cmd');
+    hint.textContent = 'Tapez votre commande — vérification automatique.'; hint.style.color='var(--text-dim)';
+    document.getElementById('modal-overlay').style.display = 'flex';
+}
+
+function openEdit(id, name, desc, command, options, category) {
+    document.getElementById('edit-id').value = id;
+    document.getElementById('modal-title').textContent = 'MODIFIER UN OUTIL';
+    document.getElementById('f-name').value    = name;
+    document.getElementById('f-desc').value    = desc;
+    document.getElementById('f-command').value = command;
+    document.getElementById('f-options').value = options;
+    document.getElementById('f-category').value = category;
+    const hint = document.getElementById('hint-cmd');
+    hint.textContent = ''; hint.style.color = 'var(--text-dim)';
+    document.getElementById('modal-overlay').style.display = 'flex';
+}
+
+function closeModal() { document.getElementById('modal-overlay').style.display = 'none'; }
+
+// ── Sauvegarder outil ─────────────────────────────────────────────────────
+async function saveTool() {
+    if (!validateName()) { showToast('Nom invalide', 'error'); return; }
+    const id = document.getElementById('edit-id').value;
+    const payload = {
+        name:            document.getElementById('f-name').value.trim(),
+        description:     document.getElementById('f-desc').value.trim(),
+        command:         document.getElementById('f-command').value.trim(),
+        default_options: document.getElementById('f-options').value.trim(),
+        category:        document.getElementById('f-category').value
+    };
+    if (!payload.command) { showToast('Commande requise', 'error'); return; }
+
+    const btn = document.getElementById('modal-save');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-sm"></span>Enregistrement...';
+
+    const url    = id ? `/api/scan-tools/${id}` : '/api/scan-tools';
+    const method = id ? 'PUT' : 'POST';
+    const res    = await fetch(url, { method, headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
+    const d      = await res.json();
+
+    btn.disabled = false; btn.textContent = 'Enregistrer';
+
+    if (d.error) { showToast(d.error, 'error'); return; }
+
+    closeModal();
+
+    // Mode édition : pas d'installation
+    if (id) { showToast(d.message || 'Outil mis à jour'); setTimeout(() => location.reload(), 600); return; }
+
+    // Mode création : outil déjà installé
+    if (d.available) { showToast(`✓ "${d.exe}" disponible. Outil prêt !`); setTimeout(() => location.reload(), 800); return; }
+
+    // Mode création : installation nécessaire → ouvrir le modal de confirmation
+    pendingToolId = d.id;
+    pendingExe    = d.exe;
+    pendingPkg    = d.package;
+    pendingKnown  = d.known;
+    openInstallModal();
+}
+
+// ── Modal d'installation ──────────────────────────────────────────────────
+function openInstallModal() {
+    const overlay = document.getElementById('install-overlay');
+    const pkgSec  = document.getElementById('install-pkg-section');
+    const title   = document.getElementById('install-modal-title');
+    const pkgInp  = document.getElementById('install-pkg-input');
+    const cfmBtn  = document.getElementById('install-confirm-btn');
+
+    // Réinitialiser
+    document.getElementById('install-sudo-pw').value = '';
+    document.getElementById('install-progress-inline').style.display = 'none';
+    document.getElementById('install-action-btns').style.display     = 'flex';
+    cfmBtn.disabled = false; cfmBtn.textContent = 'Installer';
+
+    document.getElementById('install-exe').textContent = `"${pendingExe}"`;
+
+    if (pendingKnown) {
+        // Paquet connu → section paquet masquée, juste sudo
+        pkgSec.style.display = 'none';
+        title.textContent    = `INSTALLER ${pendingExe.toUpperCase()}`;
+        pkgInp.value         = pendingPkg;
+    } else {
+        // Paquet inconnu → demander le nom
+        pkgSec.style.display = 'block';
+        title.textContent    = 'PAQUET INCONNU — CONFIRMATION REQUISE';
+        pkgInp.value         = '';
+        cfmBtn.disabled      = true;  // activé quand l'utilisateur tape un nom valide
+    }
+
+    overlay.style.display = 'flex';
+    // Focus sur le bon champ
+    setTimeout(() => {
+        if (!pendingKnown) pkgInp.focus();
+        else document.getElementById('install-sudo-pw').focus();
+    }, 100);
+}
+
+function closeInstallModal() {
+    document.getElementById('install-overlay').style.display = 'none';
+    pendingToolId = pendingExe = pendingPkg = null;
+    pendingKnown  = false;
+}
+
+async function confirmInstall() {
+    const pkgName = pendingKnown
+        ? pendingPkg
+        : document.getElementById('install-pkg-input').value.trim();
+    const sudoPw  = document.getElementById('install-sudo-pw').value;
+
+    if (!pkgName) { showToast('Nom de paquet requis', 'error'); return; }
+    if (!pendingKnown && !validatePkgName()) return;
+
+    // UI : en cours
+    const cfmBtn  = document.getElementById('install-confirm-btn');
+    const skipBtn = document.querySelector('#install-action-btns .btn-red');
+    const prog    = document.getElementById('install-progress-inline');
+    const progTxt = document.getElementById('install-progress-txt');
+
+    cfmBtn.disabled  = true;
+    skipBtn.disabled = true;
+    cfmBtn.innerHTML = '<span class="spinner-sm"></span>Installation...';
+    prog.style.display = 'block';
+    progTxt.innerHTML  = `<span class="spinner-sm"></span>apt-get install -y ${pkgName} ...`;
+
+    const res = await fetch('/api/install-tool', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ package: pkgName, sudo_password: sudoPw || null })
+    });
+    const d = await res.json();
+
+    cfmBtn.disabled  = false;
+    skipBtn.disabled = false;
+    cfmBtn.textContent = 'Installer';
+
+    if (d.ok) {
+        progTxt.innerHTML = `<span style="color:var(--accent)">✓ ${d.message}</span>`;
+        showToast(`✓ "${pkgName}" installé avec succès !`);
+        setTimeout(() => { closeInstallModal(); location.reload(); }, 2000);
+    } else {
+        progTxt.innerHTML = `<span style="color:var(--accent3)">✕ ${d.message}</span>`;
+        // Mauvais mot de passe : vider le champ et redonner le focus
+        if (d.message && d.message.includes('incorrect')) {
+            document.getElementById('install-sudo-pw').value = '';
+            document.getElementById('install-sudo-pw').focus();
+            showToast('Mot de passe sudo incorrect, réessayez.', 'error');
+        } else {
+            showToast(d.message, 'error');
+        }
+    }
+}
+
+function skipInstall() {
+    showToast(`Outil créé. "${pendingExe}" devra être installé manuellement.`, 'info');
+    closeInstallModal();
+    setTimeout(() => location.reload(), 800);
+}
+
+// ── Suppression ───────────────────────────────────────────────────────────
+function askDelete(id, name) {
+    document.getElementById('confirm-msg').textContent = `Supprimer "${name}" ?`;
+    document.getElementById('confirm-overlay').style.display = 'flex';
+    document.getElementById('confirm-yes').onclick = () => deleteTool(id);
+}
+function closeConfirm() { document.getElementById('confirm-overlay').style.display = 'none'; }
+async function deleteTool(id) {
+    closeConfirm();
+    const res = await fetch(`/api/scan-tools/${id}`, { method:'DELETE' });
+    const d   = await res.json();
+    if (d.ok) { showToast(d.message); setTimeout(() => location.reload(), 800); }
+    else showToast(d.error, 'error');
+}
+</script>
+
+{% endblock %}

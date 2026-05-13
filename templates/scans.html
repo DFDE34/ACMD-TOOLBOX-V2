@@ -1,0 +1,281 @@
+{% extends 'base.html' %}
+{% block title %}Scans — ACMD Toolbox{% endblock %}
+{% block head %}
+<style>
+.scan-launcher { background:var(--bg2); border:1px solid var(--border); padding:1.5rem; margin-bottom:1.5rem; }
+.launcher-title { font-family:'Orbitron',monospace; font-size:0.8rem; color:var(--accent); letter-spacing:3px; margin-bottom:1rem; padding-bottom:0.5rem; border-bottom:1px solid var(--border); }
+.launcher-grid { display:grid; grid-template-columns:1fr 1fr 1fr auto; gap:0.75rem; align-items:end; }
+@media(max-width:800px){ .launcher-grid { grid-template-columns:1fr; } }
+.filter-bar { display:flex; gap:0.5rem; flex-wrap:wrap; margin-bottom:1rem; align-items:center; }
+.filter-bar input, .filter-bar select { margin-bottom:0; flex:1; min-width:110px; }
+.badge { display:inline-flex; align-items:center; gap:4px; font-family:'Share Tech Mono',monospace; font-size:0.65rem; padding:2px 8px; border:1px solid; }
+.badge-completed { border-color:var(--accent);  color:var(--accent); }
+.badge-failed    { border-color:var(--accent3); color:var(--accent3); }
+.badge-running   { border-color:var(--accent2); color:var(--accent2); animation:pulse 1.5s ease-in-out infinite; }
+@keyframes pulse { 0%,100%{opacity:1}50%{opacity:0.5} }
+.scan-row { border-bottom:1px solid rgba(26,58,74,0.5); transition:background 0.15s; cursor:pointer; }
+.scan-row:hover { background: rgba(0,255,136,0.03); }
+.scan-row td { padding:0.6rem 0.75rem; font-family:'Share Tech Mono',monospace; font-size:0.8rem; vertical-align:middle; }
+.detail-row { display:none; }
+.output-pre { background:#020608; padding:1rem; font-family:'Share Tech Mono',monospace; font-size:0.8rem; color:var(--accent); white-space:pre-wrap; word-break:break-all; max-height:300px; overflow-y:auto; border:1px solid var(--border); }
+.pagination { display:flex; gap:0.5rem; justify-content:center; margin-top:1rem; flex-wrap:wrap; }
+.page-btn { background:var(--bg3); border:1px solid var(--border); color:var(--text-dim); padding:4px 12px; font-family:'Share Tech Mono',monospace; font-size:0.75rem; cursor:pointer; transition:all 0.2s; }
+.page-btn:hover, .page-btn.active { border-color:var(--accent); color:var(--accent); }
+.toast { position:fixed; bottom:1.5rem; right:1.5rem; background:var(--bg2); border:1px solid; padding:0.75rem 1.25rem; font-family:'Share Tech Mono',monospace; font-size:0.8rem; z-index:2000; transform:translateX(120%); transition:transform 0.3s; max-width:350px; }
+.toast.show { transform:translateX(0); }
+.toast.success { border-color:var(--accent); color:var(--accent); }
+.toast.error   { border-color:var(--accent3); color:var(--accent3); }
+.toast.info    { border-color:var(--accent2); color:var(--accent2); }
+.confirm-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.85); display:flex; align-items:center; justify-content:center; z-index:2000; display:none; }
+.confirm-box { background:var(--bg2); border:1px solid var(--accent3); padding:2rem; max-width:380px; width:90%; }
+.spinner-inline { display:inline-block; width:12px; height:12px; border:2px solid rgba(0,255,136,0.3); border-top-color:var(--accent); border-radius:50%; animation:spin 0.6s linear infinite; vertical-align:middle; margin-right:6px; }
+@keyframes spin { to{transform:rotate(360deg)} }
+</style>
+{% endblock %}
+{% block content %}
+
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;flex-wrap:wrap;gap:1rem;">
+    <div>
+        <h1 style="font-family:'Orbitron',monospace;font-size:1rem;letter-spacing:4px;color:var(--accent);font-weight:400;">// <span style="font-weight:900;">SCANS</span></h1>
+        <p style="font-family:'Share Tech Mono',monospace;font-size:0.75rem;color:var(--text-dim);" id="total-label">Chargement...</p>
+    </div>
+</div>
+
+<!-- Launcher -->
+<div class="scan-launcher">
+    <div class="launcher-title">> LANCER UN SCAN</div>
+    <div class="launcher-grid">
+        <div>
+            <label>Outil</label>
+            <select id="l-tool" onchange="updateToolOptions()">
+                <option value="">Choisir un outil...</option>
+            </select>
+        </div>
+        <div>
+            <label>Cible <span style="color:var(--accent3)">*</span></label>
+            <input id="l-target" placeholder="ex: 192.168.1.1 ou example.com" oninput="validateTarget()">
+        </div>
+        <div>
+            <label>Options (optionnel) <span title="Remplace les options par défaut de l'outil" style="cursor:help;color:var(--text-dim)">ℹ</span></label>
+            <input id="l-options" placeholder="Options personnalisées...">
+        </div>
+        <div style="padding-top:1.2rem;">
+            <button class="btn" id="launch-btn" onclick="launchScan()" disabled>Lancer</button>
+        </div>
+    </div>
+    <div id="launch-feedback" style="margin-top:0.75rem;display:none;font-family:'Share Tech Mono',monospace;font-size:0.8rem;"></div>
+</div>
+
+<!-- Filters -->
+<div class="filter-bar">
+    <input id="f-search" placeholder="🔍 Cible ou outil..." oninput="debounce(loadScans,400)()">
+    <select id="f-tool" onchange="loadScans()" style="flex:0.5;min-width:130px;">
+        <option value="">Tous outils</option>
+    </select>
+    <select id="f-status" onchange="loadScans()" style="flex:0.4;min-width:120px;">
+        <option value="">Tous statuts</option>
+        <option value="completed">✅ Complété</option>
+        <option value="failed">❌ Échoué</option>
+        <option value="running">🔵 En cours</option>
+    </select>
+    <input type="date" id="f-date" onchange="loadScans()" style="flex:0.4;min-width:130px;">
+    <button class="btn" onclick="clearFilters()" style="padding:0.5rem 1rem;white-space:nowrap;">Effacer</button>
+</div>
+
+<!-- Table -->
+<div class="card" style="padding:0;">
+    <table style="width:100%;border-collapse:collapse;">
+        <thead>
+            <tr style="border-bottom:1px solid var(--border);">
+                <th style="padding:0.6rem 0.75rem;font-family:'Share Tech Mono',monospace;font-size:0.7rem;color:var(--text-dim);text-align:left;letter-spacing:1px;">STATUT</th>
+                <th style="padding:0.6rem 0.75rem;font-family:'Share Tech Mono',monospace;font-size:0.7rem;color:var(--text-dim);text-align:left;letter-spacing:1px;">OUTIL</th>
+                <th style="padding:0.6rem 0.75rem;font-family:'Share Tech Mono',monospace;font-size:0.7rem;color:var(--text-dim);text-align:left;letter-spacing:1px;">CIBLE</th>
+                <th style="padding:0.6rem 0.75rem;font-family:'Share Tech Mono',monospace;font-size:0.7rem;color:var(--text-dim);text-align:left;letter-spacing:1px;">DATE</th>
+                <th style="padding:0.6rem 0.75rem;width:60px;"></th>
+            </tr>
+        </thead>
+        <tbody id="scans-body">
+            <tr><td colspan="5" style="text-align:center;padding:3rem;font-family:'Share Tech Mono',monospace;color:var(--text-dim);">Chargement...</td></tr>
+        </tbody>
+    </table>
+    <div class="pagination" id="pagination"></div>
+</div>
+
+<!-- Confirm delete -->
+<div class="confirm-overlay" id="confirm-overlay">
+<div class="confirm-box">
+    <div style="font-family:'Orbitron',monospace;font-size:0.9rem;color:var(--accent3);margin-bottom:1rem;">⚠ SUPPRESSION</div>
+    <p style="font-family:'Share Tech Mono',monospace;font-size:0.85rem;color:var(--text);margin-bottom:1.5rem;">Êtes-vous sûr ? Cette action est irréversible.</p>
+    <div style="display:flex;gap:0.75rem;">
+        <button class="btn btn-red" id="confirm-yes">Supprimer</button>
+        <button class="btn" onclick="closeConfirm()">Annuler</button>
+    </div>
+</div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let currentPage = 1;
+let availableTools = [];
+let pollingScans = new Set();
+
+function showToast(msg, type='success') {
+    const t = document.getElementById('toast');
+    t.textContent = msg; t.className = `toast ${type} show`;
+    setTimeout(() => t.className='toast', 4000);
+}
+
+function debounce(fn, delay) {
+    let timer;
+    return function(...args) { clearTimeout(timer); timer = setTimeout(() => fn(...args), delay); };
+}
+
+function clearFilters() {
+    ['f-search','f-tool','f-status','f-date'].forEach(id => {
+        const el = document.getElementById(id);
+        el.tagName === 'SELECT' ? el.value='' : el.value='';
+    });
+    currentPage = 1; loadScans();
+}
+
+function validateTarget() {
+    const val = document.getElementById('l-target').value.trim();
+    const tool = document.getElementById('l-tool').value;
+    document.getElementById('launch-btn').disabled = !val || !tool;
+}
+
+function updateToolOptions() {
+    const toolId = document.getElementById('l-tool').value;
+    const tool = availableTools.find(t => t.id == toolId);
+    if (tool) document.getElementById('l-options').placeholder = tool.default_options || 'Options personnalisées...';
+    validateTarget();
+}
+
+async function loadTools() {
+    const res = await fetch('/api/scan-tools');
+    availableTools = await res.json();
+    const sel = document.getElementById('l-tool');
+    sel.innerHTML = '<option value="">Choisir un outil...</option>' +
+        availableTools.map(t => `<option value="${t.id}">${t.name} ${t.is_builtin?'(intégré)':'(custom)'}</option>`).join('');
+}
+
+async function launchScan() {
+    const toolId = document.getElementById('l-tool').value;
+    const target = document.getElementById('l-target').value.trim();
+    const options = document.getElementById('l-options').value.trim();
+    if (!toolId || !target) { showToast('Outil et cible requis', 'error'); return; }
+    const btn = document.getElementById('launch-btn');
+    btn.disabled = true; btn.innerHTML = '<span class="spinner-inline"></span>Lancement...';
+    const res = await fetch('/api/scans/launch', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({tool_id:toolId, target, options}) });
+    const d = await res.json();
+    btn.disabled = false; btn.textContent = 'Lancer';
+    if (d.error) { showToast(d.error, 'error'); return; }
+    showToast(d.message, 'info');
+    pollingScans.add(d.scan_id);
+    document.getElementById('l-target').value = '';
+    loadScans();
+    pollRunning();
+}
+
+function pollRunning() {
+    if (pollingScans.size === 0) return;
+    setTimeout(async () => {
+        let stillRunning = false;
+        for (const scanId of [...pollingScans]) {
+            const res = await fetch(`/api/scans/${scanId}`);
+            const d = await res.json();
+            if (d.status === 'running') { stillRunning = true; }
+            else { pollingScans.delete(scanId); }
+        }
+        loadScans();
+        if (stillRunning) pollRunning();
+    }, 1500);
+}
+
+function statusBadge(status) {
+    const map = { completed:'badge-completed', failed:'badge-failed', running:'badge-running', pending:'badge-running' };
+    const icons = { completed:'✓', failed:'✕', running:'●', pending:'●' };
+    const labels = { completed:'Complété', failed:'Échoué', running:'En cours', pending:'En attente' };
+    return `<span class="badge ${map[status]||''}">${icons[status]||'?'} ${labels[status]||status}</span>`;
+}
+
+async function loadScans(page) {
+    if (page) currentPage = page;
+    const search = document.getElementById('f-search').value;
+    const tool   = document.getElementById('f-tool').value;
+    const status = document.getElementById('f-status').value;
+    const date   = document.getElementById('f-date').value;
+    const params = new URLSearchParams({ page:currentPage, search, tool, status, date });
+    const res = await fetch('/api/scans?' + params);
+    const d   = await res.json();
+
+    const sel = document.getElementById('f-tool');
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">Tous outils</option>' + d.tools.map(t => `<option value="${t}" ${t===cur?'selected':''}>${t}</option>`).join('');
+
+    document.getElementById('total-label').textContent = `${d.total} scan(s) au total`;
+
+    const body = document.getElementById('scans-body');
+    if (!d.scans.length) {
+        body.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:3rem;font-family:'Share Tech Mono',monospace;color:var(--text-dim);">
+            <div style="font-size:2rem;margin-bottom:0.5rem;opacity:0.3;">📡</div>
+            <div>Aucun scan effectué.</div>
+            <div style="font-size:0.75rem;margin-top:0.3rem;">Lancez votre premier scan ci-dessus !</div>
+        </td></tr>`;
+        document.getElementById('pagination').innerHTML = ''; return;
+    }
+
+    body.innerHTML = d.scans.map(s => `
+        <tr class="scan-row" onclick="toggleDetail('scan', ${s.id})">
+            <td>${statusBadge(s.status)}</td>
+            <td style="color:var(--accent);">${s.tool_name}</td>
+            <td style="color:var(--text-dim);">${s.target}${s.options?' <span style="color:rgba(74,122,155,0.7);font-size:0.7rem;">['+s.options+']</span>':''}</td>
+            <td style="color:var(--text-dim);font-size:0.72rem;white-space:nowrap;">${s.created_at.slice(0,16)}</td>
+            <td><button onclick="event.stopPropagation();askDelete(${s.id})" style="background:none;border:none;color:var(--accent3);cursor:pointer;font-size:0.8rem;padding:4px 8px;" title="Supprimer">✕</button></td>
+        </tr>
+        <tr id="detail-scan-${s.id}" class="detail-row">
+            <td colspan="5" style="padding:0 0.75rem 0.75rem;">
+                <div style="background:var(--bg3);border:1px solid var(--border);padding:1rem;">
+                    ${s.status==='running' ? `<div style="font-family:'Share Tech Mono',monospace;font-size:0.8rem;color:var(--accent2);margin-bottom:0.5rem;"><span class="spinner-inline"></span>Scan en cours...</div>` : ''}
+                    ${s.error ? `<div style="font-family:'Share Tech Mono',monospace;font-size:0.8rem;color:var(--accent3);margin-bottom:0.5rem;">[ERREUR] ${s.error}</div>` : ''}
+                    <pre class="output-pre">${s.output || (s.status==='running' ? 'En attente de résultats...' : 'Résultats indisponibles')}</pre>
+                </div>
+            </td>
+        </tr>
+    `).join('');
+
+    // Check for running scans, add to polling
+    d.scans.filter(s=>s.status==='running').forEach(s=>{ if(!pollingScans.has(s.id)){ pollingScans.add(s.id); pollRunning(); } });
+
+    const pages = d.pages;
+    let pag = '';
+    if (pages > 1) {
+        if (currentPage > 1) pag += `<button class="page-btn" onclick="loadScans(${currentPage-1})">◀</button>`;
+        for (let p=Math.max(1,currentPage-2); p<=Math.min(pages,currentPage+2); p++)
+            pag += `<button class="page-btn ${p===currentPage?'active':''}" onclick="loadScans(${p})">${p}</button>`;
+        if (currentPage < pages) pag += `<button class="page-btn" onclick="loadScans(${currentPage+1})">▶</button>`;
+    }
+    document.getElementById('pagination').innerHTML = pag;
+}
+
+function toggleDetail(prefix, id) {
+    const row = document.getElementById(`detail-${prefix}-${id}`);
+    row.style.display = row.style.display === 'table-row' ? 'none' : 'table-row';
+}
+
+function askDelete(id) {
+    document.getElementById('confirm-overlay').style.display = 'flex';
+    document.getElementById('confirm-yes').onclick = () => deleteScan(id);
+}
+function closeConfirm() { document.getElementById('confirm-overlay').style.display = 'none'; }
+async function deleteScan(id) {
+    closeConfirm();
+    const res = await fetch(`/api/scans/${id}`, { method:'DELETE' });
+    if ((await res.json()).ok) { showToast('Scan supprimé'); loadScans(); }
+}
+
+loadTools();
+loadScans();
+</script>
+{% endblock %}

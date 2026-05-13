@@ -1,0 +1,14 @@
+# Fichiers à exclure de l'image Docker
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.git/
+.gitignore
+toolbox.db
+*.zip
+*.tar.gz
+README.md
+.env
+.DS_Store

@@ -1,0 +1,182 @@
+{% extends 'base.html' %}
+{% block title %}Historique — ACMD Toolbox{% endblock %}
+{% block head %}
+<style>
+.filter-bar { display:flex; gap:0.5rem; flex-wrap:wrap; margin-bottom:1.5rem; align-items:center; }
+.filter-bar input, .filter-bar select { margin-bottom:0; flex:1; min-width:120px; }
+.badge { display:inline-block; font-family:'Share Tech Mono',monospace; font-size:0.65rem; padding:2px 8px; border:1px solid; letter-spacing:1px; border-radius:0; }
+.badge-completed { border-color:var(--accent); color:var(--accent); }
+.badge-failed    { border-color:var(--accent3); color:var(--accent3); }
+.badge-running   { border-color:var(--accent2); color:var(--accent2); animation: pulse 1.5s ease-in-out infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+.history-row { border-bottom:1px solid rgba(26,58,74,0.5); transition:background 0.15s; cursor:pointer; }
+.history-row:hover { background: rgba(0,255,136,0.03); }
+.history-row td { padding:0.6rem 0.75rem; font-family:'Share Tech Mono',monospace; font-size:0.8rem; vertical-align:middle; }
+.detail-panel { background:var(--bg3); border:1px solid var(--border); padding:1rem; margin-top:0.5rem; display:none; }
+.detail-panel.open { display:block; }
+.pagination { display:flex; gap:0.5rem; justify-content:center; margin-top:1rem; flex-wrap:wrap; }
+.page-btn { background:var(--bg3); border:1px solid var(--border); color:var(--text-dim); padding:4px 12px; font-family:'Share Tech Mono',monospace; font-size:0.75rem; cursor:pointer; transition:all 0.2s; }
+.page-btn:hover, .page-btn.active { border-color:var(--accent); color:var(--accent); }
+.empty-state { text-align:center; padding:4rem 2rem; font-family:'Share Tech Mono',monospace; color:var(--text-dim); }
+.empty-state .icon { font-size:3rem; margin-bottom:1rem; opacity:0.3; }
+.confirm-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.8); display:flex; align-items:center; justify-content:center; z-index:1000; display:none; }
+.confirm-box { background:var(--bg2); border:1px solid var(--accent3); padding:2rem; max-width:400px; width:90%; }
+.toast { position:fixed; bottom:1.5rem; right:1.5rem; background:var(--bg2); border:1px solid var(--border); padding:0.75rem 1.25rem; font-family:'Share Tech Mono',monospace; font-size:0.8rem; z-index:2000; transform:translateX(120%); transition:transform 0.3s; }
+.toast.show { transform:translateX(0); }
+.toast.success { border-color:var(--accent); color:var(--accent); }
+.toast.error   { border-color:var(--accent3); color:var(--accent3); }
+</style>
+{% endblock %}
+{% block content %}
+
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;">
+    <div>
+        <h1 style="font-family:'Orbitron',monospace;font-size:1rem;letter-spacing:4px;color:var(--accent);font-weight:400;">// <span style="font-weight:900;">HISTORIQUE</span></h1>
+        <p style="font-family:'Share Tech Mono',monospace;font-size:0.75rem;color:var(--text-dim);" id="total-label">Chargement...</p>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="card" style="padding:1rem;">
+    <div class="filter-bar">
+        <input id="f-search" placeholder="🔍 Rechercher (outil, cible...)" oninput="debounce(loadHistory,400)()">
+        <select id="f-tool" onchange="loadHistory()" style="flex:0.5;min-width:140px;">
+            <option value="">Tous les outils</option>
+        </select>
+        <input type="date" id="f-date" onchange="loadHistory()" style="flex:0.5;min-width:130px;">
+        <button class="btn btn-red" onclick="clearFilters()" style="white-space:nowrap;padding:0.5rem 1rem;">Effacer</button>
+    </div>
+</div>
+
+<!-- Table -->
+<div class="card" style="padding:0;">
+    <table style="width:100%;border-collapse:collapse;" id="history-table">
+        <thead>
+            <tr style="border-bottom:1px solid var(--border);">
+                <th style="padding:0.6rem 0.75rem;font-family:'Share Tech Mono',monospace;font-size:0.7rem;color:var(--text-dim);text-align:left;letter-spacing:1px;">OUTIL</th>
+                <th style="padding:0.6rem 0.75rem;font-family:'Share Tech Mono',monospace;font-size:0.7rem;color:var(--text-dim);text-align:left;letter-spacing:1px;">ENTRÉE</th>
+                <th style="padding:0.6rem 0.75rem;font-family:'Share Tech Mono',monospace;font-size:0.7rem;color:var(--text-dim);text-align:left;letter-spacing:1px;">SORTIE</th>
+                <th style="padding:0.6rem 0.75rem;font-family:'Share Tech Mono',monospace;font-size:0.7rem;color:var(--text-dim);text-align:left;letter-spacing:1px;">DATE</th>
+                <th style="padding:0.6rem 0.75rem;width:60px;"></th>
+            </tr>
+        </thead>
+        <tbody id="history-body">
+            <tr><td colspan="5" class="empty-state"><div class="icon">⏳</div><div>Chargement...</div></td></tr>
+        </tbody>
+    </table>
+    <div class="pagination" id="pagination"></div>
+</div>
+
+<!-- Confirm delete -->
+<div class="confirm-overlay" id="confirm-overlay">
+    <div class="confirm-box">
+        <div style="font-family:'Orbitron',monospace;font-size:0.9rem;color:var(--accent3);margin-bottom:1rem;">⚠ CONFIRMATION</div>
+        <p style="font-family:'Share Tech Mono',monospace;font-size:0.85rem;color:var(--text);margin-bottom:1.5rem;">Êtes-vous sûr ? Cette action est irréversible.</p>
+        <div style="display:flex;gap:0.75rem;">
+            <button class="btn btn-red" id="confirm-yes">Supprimer</button>
+            <button class="btn" onclick="closeConfirm()">Annuler</button>
+        </div>
+    </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let currentPage = 1;
+let pendingDeleteId = null;
+
+function showToast(msg, type='success') {
+    const t = document.getElementById('toast');
+    t.textContent = msg; t.className = `toast ${type} show`;
+    setTimeout(() => t.className = 'toast', 3000);
+}
+
+function debounce(fn, delay) {
+    let timer;
+    return function(...args) { clearTimeout(timer); timer = setTimeout(() => fn(...args), delay); };
+}
+
+function clearFilters() {
+    document.getElementById('f-search').value = '';
+    document.getElementById('f-tool').value = '';
+    document.getElementById('f-date').value = '';
+    currentPage = 1; loadHistory();
+}
+
+async function loadHistory(page) {
+    if (page) currentPage = page;
+    const search = document.getElementById('f-search').value;
+    const tool   = document.getElementById('f-tool').value;
+    const date   = document.getElementById('f-date').value;
+    const params = new URLSearchParams({ page: currentPage, search, tool, date });
+    const res = await fetch('/api/history?' + params);
+    const d   = await res.json();
+
+    // Update tool filter options
+    const sel = document.getElementById('f-tool');
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">Tous les outils</option>' + d.tools.map(t => `<option value="${t}" ${t===cur?'selected':''}>${t}</option>`).join('');
+
+    document.getElementById('total-label').textContent = `${d.total} entrée(s) au total`;
+
+    const body = document.getElementById('history-body');
+    if (!d.items.length) {
+        body.innerHTML = `<tr><td colspan="5"><div class="empty-state"><div class="icon">📭</div><div>Aucun résultat trouvé.</div><div style="margin-top:0.5rem;font-size:0.75rem;">Lancez votre premier outil pour voir l'historique !</div></div></td></tr>`;
+        document.getElementById('pagination').innerHTML = '';
+        return;
+    }
+
+    body.innerHTML = d.items.map(h => `
+        <tr class="history-row" onclick="toggleDetail(${h.id})">
+            <td><span style="color:var(--accent);">${h.tool}</span></td>
+            <td style="color:var(--text-dim);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${h.input || '—'}</td>
+            <td style="color:var(--text-dim);max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${(h.output||'—').replace(/\n/g,' ')}</td>
+            <td style="color:var(--text-dim);font-size:0.72rem;white-space:nowrap;">${h.created_at.slice(0,16)}</td>
+            <td><button onclick="event.stopPropagation();askDelete(${h.id})" style="background:none;border:none;color:var(--accent3);cursor:pointer;font-size:0.8rem;padding:4px 8px;" title="Supprimer">✕</button></td>
+        </tr>
+        <tr id="detail-${h.id}" style="display:none;">
+            <td colspan="5" style="padding:0 0.75rem 0.75rem;">
+                <div class="detail-panel open">
+                    <div style="font-family:'Share Tech Mono',monospace;font-size:0.75rem;color:var(--text-dim);margin-bottom:0.5rem;">SORTIE COMPLÈTE :</div>
+                    <pre style="font-family:'Share Tech Mono',monospace;font-size:0.8rem;color:var(--accent);white-space:pre-wrap;word-break:break-all;">${h.output || '(vide)'}</pre>
+                </div>
+            </td>
+        </tr>
+    `).join('');
+
+    // Pagination
+    const pages = d.pages;
+    let pag = '';
+    if (pages > 1) {
+        if (currentPage > 1) pag += `<button class="page-btn" onclick="loadHistory(${currentPage-1})">◀</button>`;
+        for (let p = Math.max(1,currentPage-2); p <= Math.min(pages,currentPage+2); p++) {
+            pag += `<button class="page-btn ${p===currentPage?'active':''}" onclick="loadHistory(${p})">${p}</button>`;
+        }
+        if (currentPage < pages) pag += `<button class="page-btn" onclick="loadHistory(${currentPage+1})">▶</button>`;
+    }
+    document.getElementById('pagination').innerHTML = pag;
+}
+
+function toggleDetail(id) {
+    const row = document.getElementById('detail-' + id);
+    row.style.display = row.style.display === 'none' ? 'table-row' : 'none';
+}
+
+function askDelete(id) {
+    pendingDeleteId = id;
+    document.getElementById('confirm-overlay').style.display = 'flex';
+    document.getElementById('confirm-yes').onclick = () => deleteItem(id);
+}
+function closeConfirm() {
+    document.getElementById('confirm-overlay').style.display = 'none';
+    pendingDeleteId = null;
+}
+async function deleteItem(id) {
+    closeConfirm();
+    const res = await fetch(`/api/history/${id}`, { method:'DELETE' });
+    if ((await res.json()).ok) { showToast('Entrée supprimée'); loadHistory(); }
+}
+
+loadHistory();
+</script>
+{% endblock %}
