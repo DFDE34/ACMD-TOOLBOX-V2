@@ -27,6 +27,48 @@ Authentification, historique, outils intégrés, outils custom, workflows encha�
 
 ---
 
+## Déploiement — Python local (sans Docker)
+
+> Adapté pour tester rapidement ou pour Windows/macOS sans Docker.  
+> Les outils pentest (nmap, gobuster, etc.) ne seront **pas** disponibles sans installation manuelle.
+
+### Linux / macOS
+
+```bash
+git clone https://github.com/DFDE34/ACMD-TOOLBOX-V2.git
+cd ACMD-TOOLBOX-V2
+
+python3 -m venv venv
+source venv/bin/activate
+
+pip install -r requirements.txt
+
+python3 app.py
+```
+
+Accès : **http://localhost:5000**
+
+### Windows (PowerShell)
+
+```powershell
+git clone https://github.com/DFDE34/ACMD-TOOLBOX-V2.git
+cd ACMD-TOOLBOX-V2
+
+python -m venv venv
+.\venv\Scripts\Activate.ps1
+
+pip install -r requirements.txt
+
+python app.py
+```
+
+Accès : **http://localhost:5000**
+
+> Sur Windows, les outils intégrés en Python pur (Port Scanner, DNS Lookup, IP Analyser, Subnet Calc) fonctionnent.  
+> Les outils custom nécessitent que l'exécutable (nmap, etc.) soit installé et dans le PATH.
+
+---
+
 ## Déploiement — Docker
 
 > Méthode recommandée. L'image embarque Kali Linux avec tous les outils pentest pré-installés.
@@ -142,48 +184,6 @@ networks:
 docker compose up -d
 docker exec -it acmd-toolbox nmap -sV 172.20.0.10
 ```
-
----
-
-## Déploiement — Python local (sans Docker)
-
-> Adapté pour tester rapidement ou pour Windows/macOS sans Docker.  
-> Les outils pentest (nmap, gobuster, etc.) ne seront **pas** disponibles sans installation manuelle.
-
-### Linux / macOS
-
-```bash
-git clone https://github.com/DFDE34/ACMD-TOOLBOX-V2.git
-cd ACMD-TOOLBOX-V2
-
-python3 -m venv venv
-source venv/bin/activate
-
-pip install -r requirements.txt
-
-python3 app.py
-```
-
-Accès : **http://localhost:5000**
-
-### Windows (PowerShell)
-
-```powershell
-git clone https://github.com/DFDE34/ACMD-TOOLBOX-V2.git
-cd ACMD-TOOLBOX-V2
-
-python -m venv venv
-.\venv\Scripts\Activate.ps1
-
-pip install -r requirements.txt
-
-python app.py
-```
-
-Accès : **http://localhost:5000**
-
-> Sur Windows, les outils intégrés en Python pur (Port Scanner, DNS Lookup, IP Analyser, Subnet Calc) fonctionnent.  
-> Les outils custom nécessitent que l'exécutable (nmap, etc.) soit installé et dans le PATH.
 
 ---
 
