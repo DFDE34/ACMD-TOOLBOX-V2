@@ -34,6 +34,9 @@ Authentification, historique, outils intégrés, outils custom, workflows encha�
 
 ### Linux / macOS
 
+> **Recommandé : Kali Linux**  
+> Kali embarque nativement nmap, gobuster, sqlmap, hydra et la plupart des outils pentest utilisés par la toolbox. Aucune installation supplémentaire n'est nécessaire pour les outils custom — ils sont déjà dans le PATH. Sur Ubuntu/Debian ou macOS, il faudra les installer manuellement au cas par cas.
+
 ```bash
 git clone https://github.com/DFDE34/ACMD-TOOLBOX-V2.git
 cd ACMD-TOOLBOX-V2
