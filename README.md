@@ -29,13 +29,13 @@ Authentification, historique, outils intégrés, outils custom, workflows encha�
 
 ## Déploiement — Python local (sans Docker)
 
-> Adapté pour tester rapidement ou pour Windows/macOS sans Docker.  
-> Les outils pentest (nmap, gobuster, etc.) ne seront **pas** disponibles sans installation manuelle.
+> Sur **Windows / macOS**, cette méthode est adaptée pour un test rapide de l'interface — les outils pentest (nmap, gobuster, etc.) ne seront pas disponibles sans installation manuelle.  
+> Sur **Linux**, c'est une installation complète et fonctionnelle, surtout sur Kali.
 
 ### Linux / macOS
 
 > **Recommandé : Kali Linux**  
-> Kali embarque nativement nmap, gobuster, sqlmap, hydra et la plupart des outils pentest utilisés par la toolbox. Aucune installation supplémentaire n'est nécessaire pour les outils custom — ils sont déjà dans le PATH. Sur Ubuntu/Debian ou macOS, il faudra les installer manuellement au cas par cas.
+> Kali embarque nativement la grande majorité des outils pentest utilisés par la toolbox (nmap, gobuster, sqlmap, hydra...). Dans la plupart des cas, aucune installation supplémentaire n'est nécessaire — ils sont déjà dans le PATH. Une installation manuelle ne sera requise que si un outil spécifique n'est pas présent sur votre distribution.
 
 ```bash
 git clone https://github.com/DFDE34/ACMD-TOOLBOX-V2.git
