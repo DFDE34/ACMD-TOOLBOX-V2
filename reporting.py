@@ -114,7 +114,8 @@ def _status_color(status):
 
 
 def generate_pdf_report(username, scans, workflow_runs, history, notes,
-                        scope='all', target_filter=None):
+                        scope='all', target_filter=None,
+                        date_from=None, date_to=None):
     buf = io.BytesIO()
     doc = SimpleDocTemplate(
         buf, pagesize=A4,
@@ -125,7 +126,7 @@ def generate_pdf_report(username, scans, workflow_runs, history, notes,
     styles = _build_styles()
     story = []
 
-    # Filtrage par cible
+    # Filtrage par cible (le filtrage date est appliqué côté SQL dans app.py)
     if target_filter:
         scans = [s for s in scans
                  if target_filter.lower() in (s.get('target') or '').lower()]
@@ -133,6 +134,16 @@ def generate_pdf_report(username, scans, workflow_runs, history, notes,
                          if target_filter.lower() in (w.get('target') or '').lower()]
         history = [h for h in history
                    if target_filter.lower() in (h.get('input') or '').lower()]
+
+    # Libellé de la période pour la page de garde
+    if date_from and date_to:
+        periode = f"Du {date_from} au {date_to}"
+    elif date_from:
+        periode = f"A partir du {date_from}"
+    elif date_to:
+        periode = f"Jusqu'au {date_to}"
+    else:
+        periode = 'Toute la periode'
 
     # ── Page de garde ────────────────────────────────────────────────────
     story.append(Spacer(1, 4 * cm))
@@ -146,6 +157,7 @@ def generate_pdf_report(username, scans, workflow_runs, history, notes,
         ['Genere par', _clean(username)],
         ['Date de generation', datetime.now().strftime('%d/%m/%Y %H:%M')],
         ['Cible filtree', _clean(target_filter) if target_filter else 'Toutes les cibles'],
+        ['Periode couverte', _clean(periode)],
         ['Scans inclus', str(len(scans))],
         ['Workflows inclus', str(len(workflow_runs))],
         ["Entrees d'historique", str(len(history))],

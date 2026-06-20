@@ -1008,32 +1008,52 @@ def report_page():
 @login_required
 def api_report_pdf():
     data = request.get_json(silent=True) or {}
-    scope = data.get('scope', 'all')
+    scope         = data.get('scope', 'all')
     target_filter = (data.get('target') or '').strip() or None
+    date_from     = (data.get('date_from') or '').strip() or None  # format YYYY-MM-DD
+    date_to       = (data.get('date_to')   or '').strip() or None  # format YYYY-MM-DD
 
     db = get_db()
+
+    # Construction des filtres date pour les requêtes SQL
+    def _date_clause(col):
+        clauses, params = [], []
+        if date_from:
+            clauses.append(f"{col} >= ?"); params.append(date_from)
+        if date_to:
+            clauses.append(f"{col} <= ?"); params.append(date_to + 'T23:59:59')
+        return (' AND ' + ' AND '.join(clauses)) if clauses else '', params
+
+    sc_clause, sc_params = _date_clause('created_at')
     scans = [dict(r) for r in db.execute(
-        'SELECT * FROM scans WHERE user_id=? ORDER BY id DESC', (current_user.id,)
+        f'SELECT * FROM scans WHERE user_id=?{sc_clause} ORDER BY id DESC',
+        [current_user.id] + sc_params
     ).fetchall()]
+
+    wr_clause, wr_params = _date_clause('workflow_runs.started_at')
     runs_raw = db.execute(
-        '''SELECT workflow_runs.*, workflows.name AS wf_name
-           FROM workflow_runs
-           JOIN workflows ON workflows.id = workflow_runs.workflow_id
-           WHERE workflow_runs.user_id=?
-           ORDER BY workflow_runs.id DESC''',
-        (current_user.id,)
+        f'''SELECT workflow_runs.*, workflows.name AS wf_name
+            FROM workflow_runs
+            JOIN workflows ON workflows.id = workflow_runs.workflow_id
+            WHERE workflow_runs.user_id=?{wr_clause}
+            ORDER BY workflow_runs.id DESC''',
+        [current_user.id] + wr_params
     ).fetchall()
     workflow_runs = [dict(r) for r in runs_raw]
+
+    hi_clause, hi_params = _date_clause('created_at')
     history = [dict(r) for r in db.execute(
-        'SELECT * FROM history WHERE user_id=? ORDER BY id DESC LIMIT 200', (current_user.id,)
+        f'SELECT * FROM history WHERE user_id=?{hi_clause} ORDER BY id DESC LIMIT 500',
+        [current_user.id] + hi_params
     ).fetchall()]
+
     notes = [dict(r) for r in db.execute(
         'SELECT * FROM notes WHERE user_id=? ORDER BY id DESC', (current_user.id,)
     ).fetchall()]
     db.close()
 
     if not scans and not workflow_runs and not history:
-        return jsonify({'error': 'Aucune donnée disponible pour générer un rapport.'}), 400
+        return jsonify({'error': 'Aucune donnée disponible pour les filtres sélectionnés.'}), 400
 
     pdf_buffer = generate_pdf_report(
         username=current_user.username,
@@ -1043,6 +1063,8 @@ def api_report_pdf():
         notes=notes,
         scope=scope,
         target_filter=target_filter,
+        date_from=date_from,
+        date_to=date_to,
     )
     filename = f'rapport_acmd_{current_user.username}_{datetime.now().strftime("%Y%m%d_%H%M")}.pdf'
     return send_file(pdf_buffer, mimetype='application/pdf', as_attachment=True, download_name=filename)

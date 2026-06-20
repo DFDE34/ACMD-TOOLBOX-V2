@@ -12,6 +12,7 @@
 
   <form id="report-form" style="display:flex;flex-direction:column;gap:1.2rem;">
 
+    <!-- Contenu -->
     <div>
       <label style="display:block;font-family:'Share Tech Mono',monospace;font-size:0.72rem;color:var(--text-dim);letter-spacing:1px;text-transform:uppercase;margin-bottom:0.4rem;">
         Contenu du rapport
@@ -24,6 +25,7 @@
       </select>
     </div>
 
+    <!-- Filtre cible -->
     <div>
       <label style="display:block;font-family:'Share Tech Mono',monospace;font-size:0.72rem;color:var(--text-dim);letter-spacing:1px;text-transform:uppercase;margin-bottom:0.4rem;">
         Filtrer par cible <span style="color:var(--text-dim);font-size:0.65rem;">(optionnel)</span>
@@ -35,8 +37,29 @@
           <option value="{{ t }}">
         {% endfor %}
       </datalist>
+    </div>
+
+    <!-- Filtre date -->
+    <div>
+      <label style="display:block;font-family:'Share Tech Mono',monospace;font-size:0.72rem;color:var(--text-dim);letter-spacing:1px;text-transform:uppercase;margin-bottom:0.4rem;">
+        Période <span style="color:var(--text-dim);font-size:0.65rem;">(optionnel)</span>
+      </label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;">
+        <div>
+          <div style="font-family:'Share Tech Mono',monospace;font-size:0.68rem;color:var(--text-dim);margin-bottom:0.25rem;">Du</div>
+          <input type="date" id="date-from"
+                 style="width:100%;padding:0.5rem;background:var(--bg2);color:var(--text);border:1px solid var(--border);
+                        font-family:'Share Tech Mono',monospace;font-size:0.82rem;color-scheme:dark;">
+        </div>
+        <div>
+          <div style="font-family:'Share Tech Mono',monospace;font-size:0.68rem;color:var(--text-dim);margin-bottom:0.25rem;">Au</div>
+          <input type="date" id="date-to"
+                 style="width:100%;padding:0.5rem;background:var(--bg2);color:var(--text);border:1px solid var(--border);
+                        font-family:'Share Tech Mono',monospace;font-size:0.82rem;color-scheme:dark;">
+        </div>
+      </div>
       <div style="font-family:'Share Tech Mono',monospace;font-size:0.68rem;color:var(--text-dim);margin-top:0.3rem;">
-        Filtre appliqué sur le champ cible des scans et workflows.
+        Filtre appliqué sur la date de création/lancement de chaque entrée.
       </div>
     </div>
 
@@ -66,8 +89,8 @@ document.getElementById('generate-btn').addEventListener('mouseout',  function()
 
 document.getElementById('report-form').addEventListener('submit', async function(e) {
   e.preventDefault();
-  const btn    = document.getElementById('generate-btn');
-  const errEl  = document.getElementById('report-error');
+  const btn   = document.getElementById('generate-btn');
+  const errEl = document.getElementById('report-error');
   errEl.style.display = 'none';
   btn.disabled = true;
   btn.textContent = 'Génération en cours...';
@@ -77,8 +100,10 @@ document.getElementById('report-form').addEventListener('submit', async function
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        scope:  document.getElementById('scope').value,
-        target: document.getElementById('target').value.trim()
+        scope:     document.getElementById('scope').value,
+        target:    document.getElementById('target').value.trim(),
+        date_from: document.getElementById('date-from').value || null,
+        date_to:   document.getElementById('date-to').value   || null,
       })
     });
 
