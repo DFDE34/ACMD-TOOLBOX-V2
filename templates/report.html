@@ -1,0 +1,109 @@
+{% extends 'base.html' %}
+{% block title %}Rapport PDF — ACMD Toolbox{% endblock %}
+{% block content %}
+<div style="max-width:680px;margin:2rem auto;">
+
+  <h1 style="font-family:'Orbitron',monospace;font-size:1rem;letter-spacing:4px;color:var(--accent);font-weight:400;margin-bottom:0.3rem;">
+    // <span style="font-weight:900;">RAPPORT PDF</span>
+  </h1>
+  <p style="font-family:'Share Tech Mono',monospace;font-size:0.78rem;color:var(--text-dim);margin-bottom:2rem;">
+    Génère un rapport de pentest (PDF) à partir de vos scans, workflows, historique et notes.
+  </p>
+
+  <form id="report-form" style="display:flex;flex-direction:column;gap:1.2rem;">
+
+    <div>
+      <label style="display:block;font-family:'Share Tech Mono',monospace;font-size:0.72rem;color:var(--text-dim);letter-spacing:1px;text-transform:uppercase;margin-bottom:0.4rem;">
+        Contenu du rapport
+      </label>
+      <select id="scope" style="width:100%;padding:0.5rem;background:var(--bg2);color:var(--text);border:1px solid var(--border);">
+        <option value="all">Tout (scans + workflows + historique + notes)</option>
+        <option value="scans">Scans uniquement</option>
+        <option value="workflows">Workflows uniquement</option>
+        <option value="history">Historique uniquement</option>
+      </select>
+    </div>
+
+    <div>
+      <label style="display:block;font-family:'Share Tech Mono',monospace;font-size:0.72rem;color:var(--text-dim);letter-spacing:1px;text-transform:uppercase;margin-bottom:0.4rem;">
+        Filtrer par cible <span style="color:var(--text-dim);font-size:0.65rem;">(optionnel)</span>
+      </label>
+      <input list="targets-list" id="target" placeholder="ex: 192.168.1.10 — laisser vide pour tout inclure"
+             style="width:100%;padding:0.5rem;background:var(--bg2);color:var(--text);border:1px solid var(--border);">
+      <datalist id="targets-list">
+        {% for t in targets %}
+          <option value="{{ t }}">
+        {% endfor %}
+      </datalist>
+      <div style="font-family:'Share Tech Mono',monospace;font-size:0.68rem;color:var(--text-dim);margin-top:0.3rem;">
+        Filtre appliqué sur le champ cible des scans et workflows.
+      </div>
+    </div>
+
+    <button type="submit" id="generate-btn"
+            style="padding:0.75rem 1.4rem;background:var(--accent);color:#000;border:none;
+                   font-family:'Share Tech Mono',monospace;font-size:0.85rem;font-weight:700;
+                   cursor:pointer;letter-spacing:1px;transition:opacity 0.2s;">
+      Générer le rapport PDF
+    </button>
+
+    <p id="report-error"
+       style="color:var(--accent3);font-family:'Share Tech Mono',monospace;font-size:0.8rem;display:none;"></p>
+
+  </form>
+
+  <div style="margin-top:2rem;background:rgba(0,204,255,0.05);border:1px solid rgba(0,204,255,0.2);
+              padding:0.75rem 1rem;font-family:'Share Tech Mono',monospace;font-size:0.75rem;color:var(--accent2);">
+    ℹ Le rapport inclut : page de garde, synthèse chiffrée, détail des scans avec sorties complètes,
+    workflows étape par étape, historique des opérations, notes de l'analyste.
+  </div>
+
+</div>
+
+<script>
+document.getElementById('generate-btn').addEventListener('mouseover', function() { this.style.opacity = '0.85'; });
+document.getElementById('generate-btn').addEventListener('mouseout',  function() { this.style.opacity = '1'; });
+
+document.getElementById('report-form').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const btn    = document.getElementById('generate-btn');
+  const errEl  = document.getElementById('report-error');
+  errEl.style.display = 'none';
+  btn.disabled = true;
+  btn.textContent = 'Génération en cours...';
+
+  try {
+    const res = await fetch('/api/report/pdf', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        scope:  document.getElementById('scope').value,
+        target: document.getElementById('target').value.trim()
+      })
+    });
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || 'Erreur lors de la génération du rapport.');
+    }
+
+    const blob = await res.blob();
+    const url  = window.URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url;
+    const cd = res.headers.get('Content-Disposition') || '';
+    a.download = cd.split('filename=')[1]?.replace(/"/g, '') || 'rapport_acmd.pdf';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+  } catch (err) {
+    errEl.textContent = err.message;
+    errEl.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Générer le rapport PDF';
+  }
+});
+</script>
+{% endblock %}

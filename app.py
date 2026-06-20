@@ -1,9 +1,10 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_file
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 import sqlite3, os, socket, re, hashlib, base64, urllib.parse, html, json, ipaddress, struct
 import threading, time
 from datetime import datetime
+from reporting import generate_pdf_report
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
@@ -71,6 +72,7 @@ NAV_LINKS = [
     ('workflows_page', 'Workflows'),
     ('scan_tools_page','Outils'),
     ('history_page',   'Historique'),
+    ('report_page',    'Rapport PDF'),
     ('owasp',          'OWASP TOP 10'),
 ]
 
@@ -658,7 +660,7 @@ def _run_shell_tool(tool, target, options):
             shell=True,
             capture_output=True,
             text=True,
-            timeout=60
+            timeout=300
         )
         stdout = result.stdout.strip()
         stderr = result.stderr.strip()
@@ -683,7 +685,7 @@ def _run_shell_tool(tool, target, options):
         return output, ''
 
     except subprocess.TimeoutExpired:
-        return '', f'Timeout : la commande a dépassé 60 secondes.\nEssayez de réduire la plage de cibles ou d\'ajouter --timeout à vos options.'
+        return '', f'Timeout : la commande a dépassé 5 minutes (300 secondes).\nEssayez de réduire la plage de cibles ou d\'ajouter --timeout à vos options.'
     except Exception as e:
         return '', f'Erreur d\'exécution : {str(e)}'
 
@@ -777,8 +779,14 @@ def api_workflow_run(wf_id):
         db4.execute('UPDATE workflow_runs SET status=?, results=?, finished_at=?, current_step=? WHERE id=?',
             (overall, json.dumps(results), datetime.now().isoformat(), len(steps), run_id))
         db4.execute('UPDATE workflows SET status=? WHERE id=?', ('idle', wf_id))
+        result_lines = []
+        for r in results:
+            icon = '✓' if r['status'] == 'completed' else '✗'
+            excerpt = (r.get('output') or r.get('error') or '').strip()[:600]
+            result_lines.append(f"{icon} Étape {r['step']} [{r.get('tool', r.get('label', ''))}]\n{excerpt}")
+        history_output = f"Statut global : {overall} | {len(results)} étape(s)\n\n" + "\n\n".join(result_lines)
         db4.execute('INSERT INTO history (user_id, tool, input, output) VALUES (?,?,?,?)',
-            (user_id, f'Workflow: {wf_name}', target, f'{len(results)} etape(s) - {overall}'))
+            (user_id, f'Workflow: {wf_name}', target, history_output[:8000]))
         db4.commit(); db4.close()
     t = threading.Thread(target=run_wf, args=(wf_id, run_id, steps, target, uid, wf_name))
     t.daemon = True; t.start()
@@ -972,6 +980,62 @@ def api_notes():
         data=request.json; db.execute('INSERT INTO notes (user_id,title,content) VALUES (?,?,?)',(current_user.id,data.get('title',''),data.get('content',''))); db.commit(); db.close(); return jsonify({'ok':True})
     elif request.method=='DELETE':
         db.execute('DELETE FROM notes WHERE id=? AND user_id=?',(request.json.get('id'),current_user.id)); db.commit(); db.close(); return jsonify({'ok':True})
+
+@app.route('/report')
+@login_required
+def report_page():
+    db = get_db()
+    targets = db.execute(
+        'SELECT DISTINCT target FROM scans WHERE user_id=? ORDER BY target',
+        (current_user.id,)
+    ).fetchall()
+    db.close()
+    return render_template('report.html', targets=[t['target'] for t in targets])
+
+
+@app.route('/api/report/pdf', methods=['POST'])
+@login_required
+def api_report_pdf():
+    data = request.get_json(silent=True) or {}
+    scope = data.get('scope', 'all')
+    target_filter = (data.get('target') or '').strip() or None
+
+    db = get_db()
+    scans = [dict(r) for r in db.execute(
+        'SELECT * FROM scans WHERE user_id=? ORDER BY id DESC', (current_user.id,)
+    ).fetchall()]
+    runs_raw = db.execute(
+        '''SELECT workflow_runs.*, workflows.name AS wf_name
+           FROM workflow_runs
+           JOIN workflows ON workflows.id = workflow_runs.workflow_id
+           WHERE workflow_runs.user_id=?
+           ORDER BY workflow_runs.id DESC''',
+        (current_user.id,)
+    ).fetchall()
+    workflow_runs = [dict(r) for r in runs_raw]
+    history = [dict(r) for r in db.execute(
+        'SELECT * FROM history WHERE user_id=? ORDER BY id DESC LIMIT 200', (current_user.id,)
+    ).fetchall()]
+    notes = [dict(r) for r in db.execute(
+        'SELECT * FROM notes WHERE user_id=? ORDER BY id DESC', (current_user.id,)
+    ).fetchall()]
+    db.close()
+
+    if not scans and not workflow_runs and not history:
+        return jsonify({'error': 'Aucune donnée disponible pour générer un rapport.'}), 400
+
+    pdf_buffer = generate_pdf_report(
+        username=current_user.username,
+        scans=scans,
+        workflow_runs=workflow_runs,
+        history=history,
+        notes=notes,
+        scope=scope,
+        target_filter=target_filter,
+    )
+    filename = f'rapport_acmd_{current_user.username}_{datetime.now().strftime("%Y%m%d_%H%M")}.pdf'
+    return send_file(pdf_buffer, mimetype='application/pdf', as_attachment=True, download_name=filename)
+
 
 if __name__ == '__main__':
     app.run(debug=True, threaded=True)
