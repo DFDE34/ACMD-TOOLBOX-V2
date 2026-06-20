@@ -32,15 +32,40 @@
     <form method="POST">
         <label>// Identifiant (min 3 chars)</label>
         <input type="text" name="username" placeholder="hacker42" required>
-        <label>// Mot de passe (min 6 chars)</label>
-        <input type="password" name="password" placeholder="••••••••" required>
+        <label>// Mot de passe</label>
+        <input type="password" name="password" id="password" placeholder="••••••••••••" required>
+        <div id="pwd-rules" style="margin:-0.8rem 0 1rem;font-family:'Share Tech Mono',monospace;font-size:0.68rem;line-height:1.7;">
+            <span id="r-len"  style="color:var(--accent3)">✗ 10 caractères min</span><br>
+            <span id="r-upper" style="color:var(--accent3)">✗ 1 majuscule</span><br>
+            <span id="r-lower" style="color:var(--accent3)">✗ 1 minuscule</span><br>
+            <span id="r-digit" style="color:var(--accent3)">✗ 1 chiffre</span><br>
+            <span id="r-spec"  style="color:var(--accent3)">✗ 1 caractère spécial (!@#$%...)</span>
+        </div>
         <button type="submit" class="btn" id="submitBtn" disabled>[ Créer le compte ]</button>
     </form>
     <script>
-        const u = document.querySelector('input[name=username]');
-        const p = document.querySelector('input[name=password]');
+        const u   = document.querySelector('input[name=username]');
+        const p   = document.getElementById('password');
         const btn = document.getElementById('submitBtn');
-        function check() { btn.disabled = !u.value.trim() || !p.value; }
+        const rules = {
+            'r-len':   v => v.length >= 10,
+            'r-upper': v => /[A-Z]/.test(v),
+            'r-lower': v => /[a-z]/.test(v),
+            'r-digit': v => /[0-9]/.test(v),
+            'r-spec':  v => /[!@#$%^&*()\-_=+\[\]{}|;:,.<>?/]/.test(v),
+        };
+        function check() {
+            const val = p.value;
+            let allOk = true;
+            for (const [id, fn] of Object.entries(rules)) {
+                const ok = fn(val);
+                const el = document.getElementById(id);
+                el.style.color = ok ? 'var(--accent)' : 'var(--accent3)';
+                el.textContent = (ok ? '✓ ' : '✗ ') + el.textContent.slice(2);
+                if (!ok) allOk = false;
+            }
+            btn.disabled = !u.value.trim() || !allOk;
+        }
         u.addEventListener('input', check);
         p.addEventListener('input', check);
     </script>

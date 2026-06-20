@@ -12,6 +12,45 @@ from reportlab.platypus import (
 )
 from reportlab.lib.enums import TA_CENTER
 
+# Caractères de boîte ASCII → remplacements lisibles en Latin-1
+_BOX_MAP = str.maketrans({
+    '╔': '+', '╗': '+', '╚': '+', '╝': '+', '╠': '+', '╣': '+',
+    '╦': '+', '╩': '+', '╬': '+', '║': '|', '═': '-',
+    '┌': '+', '┐': '+', '└': '+', '┘': '+', '├': '+', '┤': '+',
+    '┬': '+', '┴': '+', '┼': '+', '│': '|', '─': '-',
+    '✓': '[OK]', '✗': '[KO]', '✕': '[X]', '●': '*', '○': 'o',
+    '▶': '>', '◀': '<', '»': '>>', '«': '<<',
+})
+
+
+def _clean(text, limit=None):
+    """
+    Nettoie le texte pour ReportLab (polices Latin-1 uniquement) :
+    - Remplace les caractères de boîte ASCII par des équivalents ASCII
+    - Supprime les caractères non encodables en Latin-1
+    - Tronque si limit est précisé
+    """
+    text = str(text or '').translate(_BOX_MAP)
+    result = []
+    for ch in text:
+        try:
+            ch.encode('latin-1')
+            result.append(ch)
+        except (UnicodeEncodeError, UnicodeDecodeError):
+            result.append('?')
+    text = ''.join(result)
+    if limit and len(text) > limit:
+        text = text[:limit] + ' [...]'
+    return text
+
+
+def _safe(text):
+    """Échappe pour XML/Paragraph ReportLab (après _clean)."""
+    text = _clean(text)
+    return (text.replace('&', '&amp;')
+                .replace('<', '&lt;')
+                .replace('>', '&gt;'))
+
 
 def _build_styles():
     styles = getSampleStyleSheet()
@@ -39,13 +78,25 @@ def _build_styles():
     ))
     styles.add(ParagraphStyle(
         name='ACMDMono', parent=styles['Normal'],
-        fontName='Courier', fontSize=8, leading=10,
+        fontName='Courier', fontSize=8, leading=11,
         textColor=colors.HexColor('#1a1a1a'),
         backColor=colors.HexColor('#f6f8fa'),
+        wordWrap='LTR',
     ))
     styles.add(ParagraphStyle(
         name='ACMDMeta', parent=styles['Normal'],
         fontSize=9, textColor=colors.HexColor('#57606a')
+    ))
+    styles.add(ParagraphStyle(
+        name='TCell', parent=styles['Normal'],
+        fontSize=7.5, leading=10, wordWrap='LTR',
+        spaceAfter=0, spaceBefore=0,
+    ))
+    styles.add(ParagraphStyle(
+        name='TCellMono', parent=styles['Normal'],
+        fontName='Courier', fontSize=7, leading=9,
+        wordWrap='LTR', spaceAfter=0, spaceBefore=0,
+        textColor=colors.HexColor('#1a1a1a'),
     ))
     return styles
 
@@ -59,22 +110,7 @@ STATUS_COLORS = {
 
 
 def _status_color(status):
-    c = STATUS_COLORS.get(status, colors.grey)
-    return c.hexval()
-
-
-def _truncate(text, limit=1500):
-    text = str(text or '')
-    if len(text) > limit:
-        return text[:limit] + '\n[... tronqué — voir le résultat complet dans l\'application ...]'
-    return text
-
-
-def _safe(text):
-    text = '' if text is None else str(text)
-    return (text.replace('&', '&amp;')
-                .replace('<', '&lt;')
-                .replace('>', '&gt;'))
+    return STATUS_COLORS.get(status, colors.grey).hexval()
 
 
 def generate_pdf_report(username, scans, workflow_runs, history, notes,
@@ -91,25 +127,28 @@ def generate_pdf_report(username, scans, workflow_runs, history, notes,
 
     # Filtrage par cible
     if target_filter:
-        scans = [s for s in scans if target_filter.lower() in (s.get('target') or '').lower()]
-        workflow_runs = [w for w in workflow_runs if target_filter.lower() in (w.get('target') or '').lower()]
-        history = [h for h in history if target_filter.lower() in (h.get('input') or '').lower()]
+        scans = [s for s in scans
+                 if target_filter.lower() in (s.get('target') or '').lower()]
+        workflow_runs = [w for w in workflow_runs
+                         if target_filter.lower() in (w.get('target') or '').lower()]
+        history = [h for h in history
+                   if target_filter.lower() in (h.get('input') or '').lower()]
 
     # ── Page de garde ────────────────────────────────────────────────────
     story.append(Spacer(1, 4 * cm))
     story.append(Paragraph('ACMD TOOLBOX V2', styles['ACMDTitle']))
-    story.append(Paragraph('Rapport de tests de sécurité / pentest', styles['ACMDSubtitle']))
+    story.append(Paragraph('Rapport de tests de securite / pentest', styles['ACMDSubtitle']))
     story.append(Spacer(1, 1 * cm))
     story.append(HRFlowable(width='100%', color=colors.HexColor('#1f6feb'), thickness=1.5))
     story.append(Spacer(1, 0.6 * cm))
 
     meta_rows = [
-        ['Généré par', username],
-        ['Date de génération', datetime.now().strftime('%d/%m/%Y %H:%M')],
-        ['Cible filtrée', target_filter or 'Toutes les cibles'],
+        ['Genere par', _clean(username)],
+        ['Date de generation', datetime.now().strftime('%d/%m/%Y %H:%M')],
+        ['Cible filtree', _clean(target_filter) if target_filter else 'Toutes les cibles'],
         ['Scans inclus', str(len(scans))],
         ['Workflows inclus', str(len(workflow_runs))],
-        ['Entrées d\'historique', str(len(history))],
+        ["Entrees d'historique", str(len(history))],
     ]
     meta_table = Table(meta_rows, colWidths=[6 * cm, 9 * cm])
     meta_table.setStyle(TableStyle([
@@ -123,22 +162,22 @@ def generate_pdf_report(username, scans, workflow_runs, history, notes,
     story.append(meta_table)
     story.append(PageBreak())
 
-    # ── 1. Synthèse ──────────────────────────────────────────────────────
-    story.append(Paragraph('1. Synthèse', styles['ACMDH1']))
+    # ── 1. Synthese ──────────────────────────────────────────────────────
+    story.append(Paragraph('1. Synthese', styles['ACMDH1']))
 
-    completed = len([s for s in scans if s.get('status') == 'completed'])
-    failed = len([s for s in scans if s.get('status') == 'failed'])
-    targets = sorted({s.get('target') for s in scans if s.get('target')})
+    completed  = len([s for s in scans if s.get('status') == 'completed'])
+    failed     = len([s for s in scans if s.get('status') == 'failed'])
+    targets    = sorted({s.get('target') for s in scans if s.get('target')})
     tools_used = sorted({s.get('tool_name') for s in scans if s.get('tool_name')})
 
     summary_rows = [
         ['Indicateur', 'Valeur'],
-        ['Scans exécutés', str(len(scans))],
-        ['Scans réussis', str(completed)],
-        ['Scans en échec', str(failed)],
-        ['Cibles distinctes analysées', str(len(targets))],
-        ['Outils utilisés', ', '.join(tools_used) if tools_used else '—'],
-        ['Workflows exécutés', str(len(workflow_runs))],
+        ['Scans executes', str(len(scans))],
+        ['Scans reussis', str(completed)],
+        ['Scans en echec', str(failed)],
+        ['Cibles distinctes analysees', str(len(targets))],
+        ['Outils utilises', ', '.join(_clean(t) for t in tools_used) if tools_used else '-'],
+        ['Workflows executes', str(len(workflow_runs))],
     ]
     summary_table = Table(summary_rows, colWidths=[7 * cm, 8 * cm])
     summary_table.setStyle(TableStyle([
@@ -154,29 +193,36 @@ def generate_pdf_report(username, scans, workflow_runs, history, notes,
     story.append(summary_table)
     if targets:
         story.append(Spacer(1, 0.3 * cm))
-        story.append(Paragraph('Cibles concernées : ' + ', '.join(_safe(t) for t in targets), styles['ACMDMeta']))
+        story.append(Paragraph(
+            'Cibles concernees : ' + ', '.join(_safe(t) for t in targets),
+            styles['ACMDMeta']
+        ))
 
-    # ── 2. Détail des scans ──────────────────────────────────────────────
+    # ── 2. Detail des scans ──────────────────────────────────────────────
     if scope in ('all', 'scans') and scans:
         story.append(PageBreak())
-        story.append(Paragraph('2. Détail des scans', styles['ACMDH1']))
+        story.append(Paragraph('2. Detail des scans', styles['ACMDH1']))
 
         for s in scans:
             block = []
-            header = (f"<b>{_safe(s.get('tool_name'))}</b> &rarr; "
+            header = (f"<b>{_safe(s.get('tool_name'))}</b> -&gt; "
                       f"cible : <b>{_safe(s.get('target'))}</b>")
             block.append(Paragraph(header, styles['ACMDH2']))
 
             status = s.get('status', 'pending')
-            status_color = _status_color(status)
-            meta = (f"Statut : <font color='{status_color}'><b>{status.upper()}</b></font> &nbsp;|&nbsp; "
-                    f"Options : {_safe(s.get('options') or '—')} &nbsp;|&nbsp; "
-                    f"Lancé le : {_safe(s.get('started_at') or s.get('created_at') or '—')}")
+            sc = _status_color(status)
+            meta = (f"Statut : <font color='{sc}'><b>{status.upper()}</b></font>"
+                    f" | Options : {_safe(s.get('options') or '-')}"
+                    f" | Lance le : {_safe(s.get('started_at') or s.get('created_at') or '-')}")
             block.append(Paragraph(meta, styles['ACMDMeta']))
             block.append(Spacer(1, 0.15 * cm))
 
-            output = s.get('output') or s.get('error') or '(aucune sortie enregistrée)'
-            block.append(Paragraph(_safe(_truncate(output)).replace('\n', '<br/>'), styles['ACMDMono']))
+            raw_out = s.get('output') or s.get('error') or '(aucune sortie enregistree)'
+            cleaned = _clean(raw_out, limit=2000)
+            block.append(Paragraph(
+                _safe(cleaned).replace('\n', '<br/>'),
+                styles['ACMDMono']
+            ))
             block.append(Spacer(1, 0.4 * cm))
             block.append(HRFlowable(width='100%', color=colors.HexColor('#d0d7de'), thickness=0.5))
             block.append(Spacer(1, 0.3 * cm))
@@ -184,20 +230,24 @@ def generate_pdf_report(username, scans, workflow_runs, history, notes,
             story.append(KeepTogether(block[:3]))
             story.extend(block[3:])
 
-    # ── 3. Workflows exécutés ────────────────────────────────────────────
+    # ── 3. Workflows executes ────────────────────────────────────────────
     if scope in ('all', 'workflows') and workflow_runs:
         story.append(PageBreak())
-        story.append(Paragraph('3. Workflows exécutés', styles['ACMDH1']))
+        story.append(Paragraph('3. Workflows executes', styles['ACMDH1']))
+
+        # Styles pour les cellules du tableau workflow
+        cell  = styles['TCell']
+        cmono = styles['TCellMono']
 
         for w in workflow_runs:
             status = w.get('status', 'pending')
-            status_color = _status_color(status)
+            sc = _status_color(status)
             header = (f"<b>{_safe(w.get('wf_name', 'Workflow'))}</b>"
                       f" sur cible <b>{_safe(w.get('target'))}</b>")
             story.append(Paragraph(header, styles['ACMDH2']))
-            meta = (f"Statut global : <font color='{status_color}'><b>{status.upper()}</b></font>"
-                    f" &nbsp;|&nbsp; Étapes : {w.get('total_steps', 0)}"
-                    f" &nbsp;|&nbsp; Terminé le : {_safe(w.get('finished_at') or '—')}")
+            meta = (f"Statut global : <font color='{sc}'><b>{status.upper()}</b></font>"
+                    f" | Etapes : {w.get('total_steps', 0)}"
+                    f" | Termine le : {_safe(w.get('finished_at') or '-')}")
             story.append(Paragraph(meta, styles['ACMDMeta']))
             story.append(Spacer(1, 0.2 * cm))
 
@@ -207,60 +257,100 @@ def generate_pdf_report(username, scans, workflow_runs, history, notes,
                 results = []
 
             if results:
-                rows = [['#', 'Outil', 'Statut', 'Résultat (extrait)']]
+                # En-têtes
+                header_row = [
+                    Paragraph('<b>#</b>', cell),
+                    Paragraph('<b>Outil</b>', cell),
+                    Paragraph('<b>Statut</b>', cell),
+                    Paragraph('<b>Resultat (extrait)</b>', cell),
+                ]
+                rows = [header_row]
                 for r in results:
-                    excerpt = (r.get('output') or r.get('error') or '')[:150].replace('\n', ' ')
+                    excerpt = _clean(r.get('output') or r.get('error') or '', limit=200)
+                    # Supprime les lignes de séparation de boîte redondantes
+                    excerpt = ' '.join(
+                        ln.strip() for ln in excerpt.splitlines()
+                        if ln.strip() and not set(ln.strip()) <= set('+-|=')
+                    )
+                    rst = r.get('status', '')
+                    rst_color = _status_color(rst)
                     rows.append([
-                        str(r.get('step', '')),
-                        _safe(r.get('tool', r.get('label', ''))),
-                        r.get('status', ''),
-                        _safe(excerpt),
+                        Paragraph(_safe(str(r.get('step', ''))), cell),
+                        Paragraph(_safe(r.get('tool', r.get('label', ''))), cell),
+                        Paragraph(
+                            f"<font color='{rst_color}'><b>{rst.upper()}</b></font>",
+                            cell
+                        ),
+                        Paragraph(_safe(excerpt), cmono),
                     ])
-                t = Table(rows, colWidths=[1 * cm, 3.5 * cm, 2.5 * cm, 8 * cm])
+
+                # Largeurs : #, Outil, Statut, Résultat
+                t = Table(rows, colWidths=[0.8 * cm, 3.5 * cm, 2.2 * cm, 9 * cm])
                 t.setStyle(TableStyle([
                     ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#24292f')),
                     ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
                     ('FONTSIZE', (0, 0), (-1, -1), 7.5),
                     ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#d0d7de')),
                     ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                    ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f6f8fa')]),
+                    ('TOPPADDING', (0, 0), (-1, -1), 4),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+                    ('ROWBACKGROUNDS', (0, 1), (-1, -1),
+                     [colors.white, colors.HexColor('#f6f8fa')]),
                 ]))
                 story.append(t)
             story.append(Spacer(1, 0.6 * cm))
 
-    # ── 4. Historique des opérations ─────────────────────────────────────
+    # ── 4. Historique des operations ─────────────────────────────────────
     if scope in ('all', 'history') and history:
         story.append(PageBreak())
-        story.append(Paragraph('4. Historique des opérations', styles['ACMDH1']))
+        story.append(Paragraph("4. Historique des operations", styles['ACMDH1']))
 
-        rows = [['Date', 'Outil', 'Entrée', 'Résultat (extrait)']]
+        cell  = styles['TCell']
+        cmono = styles['TCellMono']
+
+        header_row = [
+            Paragraph('<b>Date</b>', cell),
+            Paragraph('<b>Outil</b>', cell),
+            Paragraph('<b>Entree</b>', cell),
+            Paragraph('<b>Resultat (extrait)</b>', cell),
+        ]
+        rows = [header_row]
         for h in history[:200]:
             rows.append([
-                _safe((h.get('created_at') or '')[:16]),
-                _safe(h.get('tool') or ''),
-                _safe((h.get('input') or '')[:40]),
-                _safe((h.get('output') or '')[:80]),
+                Paragraph(_safe((h.get('created_at') or '')[:16]), cell),
+                Paragraph(_safe(h.get('tool') or ''), cell),
+                Paragraph(_safe(_clean(h.get('input') or '', limit=50)), cell),
+                Paragraph(_safe(_clean(h.get('output') or '', limit=100)), cmono),
             ])
-        t = Table(rows, colWidths=[3 * cm, 3 * cm, 4 * cm, 5 * cm], repeatRows=1)
+        t = Table(rows,
+                  colWidths=[3 * cm, 3 * cm, 4 * cm, 5.5 * cm],
+                  repeatRows=1)
         t.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#24292f')),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
             ('FONTSIZE', (0, 0), (-1, -1), 7),
             ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#d0d7de')),
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f6f8fa')]),
+            ('TOPPADDING', (0, 0), (-1, -1), 3),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1),
+             [colors.white, colors.HexColor('#f6f8fa')]),
         ]))
         story.append(t)
 
     # ── 5. Notes de l'analyste ───────────────────────────────────────────
     if scope == 'all' and notes:
         story.append(PageBreak())
-        story.append(Paragraph('5. Notes de l\'analyste', styles['ACMDH1']))
+        story.append(Paragraph("5. Notes de l'analyste", styles['ACMDH1']))
         for n in notes:
-            story.append(Paragraph(f"<b>{_safe(n.get('title') or 'Sans titre')}</b>", styles['ACMDH2']))
-            story.append(Paragraph(_safe(n.get('content') or '').replace('\n', '<br/>'), styles['Normal']))
+            story.append(Paragraph(
+                f"<b>{_safe(n.get('title') or 'Sans titre')}</b>",
+                styles['ACMDH2']
+            ))
+            story.append(Paragraph(
+                _safe(_clean(n.get('content') or '')).replace('\n', '<br/>'),
+                styles['Normal']
+            ))
             story.append(Spacer(1, 0.4 * cm))
 
     # ── Pied de page ─────────────────────────────────────────────────────
@@ -268,8 +358,10 @@ def generate_pdf_report(username, scans, workflow_runs, history, notes,
         canvas.saveState()
         canvas.setFont('Helvetica', 7.5)
         canvas.setFillColor(colors.HexColor('#8c959f'))
-        canvas.drawString(2 * cm, 1.2 * cm,
-                          'ACMD Toolbox V2 — Rapport généré automatiquement, à usage interne / pédagogique.')
+        canvas.drawString(
+            2 * cm, 1.2 * cm,
+            'ACMD Toolbox V2 - Rapport genere automatiquement, a usage interne / pedagogique.'
+        )
         canvas.drawRightString(A4[0] - 2 * cm, 1.2 * cm, f'Page {doc_.page}')
         canvas.restoreState()
 

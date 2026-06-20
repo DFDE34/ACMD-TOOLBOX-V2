@@ -110,18 +110,29 @@ def register():
     if request.method == 'POST':
         username = request.form['username'].strip()
         password = request.form['password']
+        error = None
         if len(username) < 3:
-            flash('Username doit contenir au moins 3 caractères.')
-        elif len(password) < 6:
-            flash('Le mot de passe doit contenir au moins 6 caractères.')
+            error = 'Le nom d\'utilisateur doit contenir au moins 3 caractères.'
+        elif len(password) < 10:
+            error = 'Le mot de passe doit contenir au moins 10 caractères.'
+        elif not re.search(r'[A-Z]', password):
+            error = 'Le mot de passe doit contenir au moins une lettre majuscule.'
+        elif not re.search(r'[a-z]', password):
+            error = 'Le mot de passe doit contenir au moins une lettre minuscule.'
+        elif not re.search(r'[0-9]', password):
+            error = 'Le mot de passe doit contenir au moins un chiffre.'
+        elif not re.search(r'[!@#$%^&*()\-_=+\[\]{}|;:,.<>?/]', password):
+            error = 'Le mot de passe doit contenir au moins un caractère spécial (!@#$%...).'
+        if error:
+            flash(error)
         else:
             try:
                 db = get_db()
                 db.execute('INSERT INTO users (username, password) VALUES (?,?)', (username, generate_password_hash(password)))
                 db.commit(); db.close()
-                flash('Compte cree. Connectez-vous.')
+                flash('Compte créé. Connectez-vous.')
                 return redirect(url_for('login'))
-            except: flash("Ce nom d'utilisateur existe deja.")
+            except: flash("Ce nom d'utilisateur existe déjà.")
     return render_template('register.html')
 
 @app.route('/logout')
