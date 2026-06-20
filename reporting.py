@@ -257,86 +257,56 @@ def generate_pdf_report(username, scans, workflow_runs, history, notes,
                 results = []
 
             if results:
-                # En-têtes
-                header_row = [
-                    Paragraph('<b>#</b>', cell),
-                    Paragraph('<b>Outil</b>', cell),
-                    Paragraph('<b>Statut</b>', cell),
-                    Paragraph('<b>Resultat (extrait)</b>', cell),
-                ]
-                rows = [header_row]
                 for r in results:
-                    excerpt = _clean(r.get('output') or r.get('error') or '', limit=200)
-                    # Supprime les lignes de séparation de boîte redondantes
-                    excerpt = ' '.join(
-                        ln.strip() for ln in excerpt.splitlines()
-                        if ln.strip() and not set(ln.strip()) <= set('+-|=')
-                    )
                     rst = r.get('status', '')
                     rst_color = _status_color(rst)
-                    rows.append([
-                        Paragraph(_safe(str(r.get('step', ''))), cell),
-                        Paragraph(_safe(r.get('tool', r.get('label', ''))), cell),
-                        Paragraph(
-                            f"<font color='{rst_color}'><b>{rst.upper()}</b></font>",
-                            cell
-                        ),
-                        Paragraph(_safe(excerpt), cmono),
-                    ])
-
-                # Largeurs : #, Outil, Statut, Résultat
-                t = Table(rows, colWidths=[0.8 * cm, 3.5 * cm, 2.2 * cm, 9 * cm])
-                t.setStyle(TableStyle([
-                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#24292f')),
-                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-                    ('FONTSIZE', (0, 0), (-1, -1), 7.5),
-                    ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#d0d7de')),
-                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                    ('TOPPADDING', (0, 0), (-1, -1), 4),
-                    ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-                    ('ROWBACKGROUNDS', (0, 1), (-1, -1),
-                     [colors.white, colors.HexColor('#f6f8fa')]),
-                ]))
-                story.append(t)
-            story.append(Spacer(1, 0.6 * cm))
+                    step_header = (
+                        f"<font color='{rst_color}'><b>Etape {r.get('step', '')} — "
+                        f"{_safe(r.get('tool', r.get('label', '')))} — "
+                        f"{rst.upper()}</b></font>"
+                    )
+                    story.append(Paragraph(step_header, styles['ACMDMeta']))
+                    raw = _clean(r.get('output') or r.get('error') or '(aucune sortie)')
+                    # Supprime les lignes purement graphiques (+---+, |===|)
+                    lines = [
+                        ln for ln in raw.splitlines()
+                        if ln.strip() and not set(ln.strip()) <= set('+-|= ')
+                    ]
+                    cleaned = '\n'.join(lines)
+                    story.append(Paragraph(
+                        _safe(cleaned).replace('\n', '<br/>'),
+                        styles['ACMDMono']
+                    ))
+                    story.append(Spacer(1, 0.2 * cm))
+            story.append(Spacer(1, 0.4 * cm))
 
     # ── 4. Historique des operations ─────────────────────────────────────
     if scope in ('all', 'history') and history:
         story.append(PageBreak())
         story.append(Paragraph("4. Historique des operations", styles['ACMDH1']))
 
-        cell  = styles['TCell']
-        cmono = styles['TCellMono']
-
-        header_row = [
-            Paragraph('<b>Date</b>', cell),
-            Paragraph('<b>Outil</b>', cell),
-            Paragraph('<b>Entree</b>', cell),
-            Paragraph('<b>Resultat (extrait)</b>', cell),
-        ]
-        rows = [header_row]
         for h in history[:200]:
-            rows.append([
-                Paragraph(_safe((h.get('created_at') or '')[:16]), cell),
-                Paragraph(_safe(h.get('tool') or ''), cell),
-                Paragraph(_safe(_clean(h.get('input') or '', limit=50)), cell),
-                Paragraph(_safe(_clean(h.get('output') or '', limit=100)), cmono),
-            ])
-        t = Table(rows,
-                  colWidths=[3 * cm, 3 * cm, 4 * cm, 5.5 * cm],
-                  repeatRows=1)
-        t.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#24292f')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-            ('FONTSIZE', (0, 0), (-1, -1), 7),
-            ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#d0d7de')),
-            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('TOPPADDING', (0, 0), (-1, -1), 3),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1),
-             [colors.white, colors.HexColor('#f6f8fa')]),
-        ]))
-        story.append(t)
+            date  = _safe((h.get('created_at') or '')[:16])
+            tool  = _safe(h.get('tool') or '')
+            inp   = _safe(_clean(h.get('input') or '', limit=120))
+            meta_line = f"<b>{tool}</b> | {date} | Entree : {inp}"
+            story.append(Paragraph(meta_line, styles['ACMDMeta']))
+
+            raw_out = _clean(h.get('output') or '(aucune sortie)')
+            # Filtre les lignes purement graphiques
+            lines = [
+                ln for ln in raw_out.splitlines()
+                if ln.strip() and not set(ln.strip()) <= set('+-|= ')
+            ]
+            out_text = '\n'.join(lines) if lines else raw_out
+            story.append(Paragraph(
+                _safe(out_text).replace('\n', '<br/>'),
+                styles['ACMDMono']
+            ))
+            story.append(Spacer(1, 0.15 * cm))
+            story.append(HRFlowable(width='100%', color=colors.HexColor('#e8eaed'),
+                                    thickness=0.3))
+            story.append(Spacer(1, 0.2 * cm))
 
     # ── 5. Notes de l'analyste ───────────────────────────────────────────
     if scope == 'all' and notes:
