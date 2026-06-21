@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ACMD Toolbox — Setup initial</title>
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg:#050a0e;--bg2:#0a1520;--bg3:#0d1f2d;
+            --accent:#00ff88;--accent2:#00ccff;--accent3:#ff3366;
+            --text:#c8e6f5;--text-dim:#4a7a9b;--border:#1a3a4a;
+        }
+        *{margin:0;padding:0;box-sizing:border-box;}
+        body{
+            background:var(--bg);color:var(--text);font-family:'Rajdhani',sans-serif;
+            min-height:100vh;display:flex;align-items:center;justify-content:center;
+            background-image:
+                radial-gradient(ellipse at 50% 50%,rgba(0,255,136,0.06) 0%,transparent 60%),
+                linear-gradient(rgba(0,255,136,0.02) 1px,transparent 1px),
+                linear-gradient(90deg,rgba(0,255,136,0.02) 1px,transparent 1px);
+            background-size:100% 100%,40px 40px,40px 40px;
+        }
+        .setup-box{
+            width:440px;border:1px solid var(--accent);
+            background:var(--bg2);padding:3rem 2.5rem;position:relative;
+            box-shadow:0 0 40px rgba(0,255,136,0.08);
+        }
+        .setup-box::before{
+            content:'';position:absolute;top:0;left:0;right:0;height:2px;
+            background:linear-gradient(90deg,transparent,var(--accent),transparent);
+        }
+        .corner{position:absolute;width:14px;height:14px;border-color:var(--accent);border-style:solid;}
+        .corner-tl{top:-1px;left:-1px;border-width:2px 0 0 2px;}
+        .corner-tr{top:-1px;right:-1px;border-width:2px 2px 0 0;}
+        .corner-bl{bottom:-1px;left:-1px;border-width:0 0 2px 2px;}
+        .corner-br{bottom:-1px;right:-1px;border-width:0 2px 2px 0;}
+        .logo{
+            text-align:center;font-family:'Orbitron',monospace;font-size:1.5rem;
+            font-weight:900;color:var(--accent);text-shadow:0 0 30px rgba(0,255,136,0.5);
+            letter-spacing:5px;margin-bottom:0.3rem;
+        }
+        .logo span{color:var(--accent2);}
+        .subtitle{
+            text-align:center;font-family:'Share Tech Mono',monospace;font-size:0.68rem;
+            color:var(--text-dim);letter-spacing:3px;margin-bottom:1.5rem;
+        }
+        .setup-banner{
+            background:rgba(0,255,136,0.07);border:1px solid rgba(0,255,136,0.35);
+            padding:0.65rem 0.9rem;font-family:'Share Tech Mono',monospace;font-size:0.72rem;
+            color:var(--accent);margin-bottom:1.5rem;line-height:1.6;
+        }
+        .setup-banner strong{display:block;margin-bottom:0.2rem;letter-spacing:1px;}
+        label{
+            font-family:'Share Tech Mono',monospace;font-size:0.72rem;color:var(--text-dim);
+            letter-spacing:2px;display:block;margin-bottom:0.3rem;text-transform:uppercase;
+        }
+        input{
+            width:100%;background:var(--bg3);border:1px solid var(--border);
+            color:var(--accent);padding:0.7rem 0.9rem;font-family:'Share Tech Mono',monospace;
+            font-size:0.9rem;outline:none;margin-bottom:1rem;transition:border-color 0.2s,box-shadow 0.2s;
+        }
+        input:focus{border-color:var(--accent);box-shadow:0 0 10px rgba(0,255,136,0.2);}
+        .btn{
+            width:100%;background:transparent;border:1px solid var(--accent);color:var(--accent);
+            padding:0.75rem;font-family:'Share Tech Mono',monospace;font-size:0.9rem;
+            letter-spacing:4px;cursor:pointer;text-transform:uppercase;transition:all 0.2s;
+            margin-top:0.4rem;
+        }
+        .btn:hover:not(:disabled){background:var(--accent);color:var(--bg);box-shadow:0 0 20px rgba(0,255,136,0.4);}
+        .btn:disabled{opacity:0.35;cursor:not-allowed;}
+        .flash{
+            background:rgba(255,51,102,0.1);border:1px solid var(--accent3);
+            color:var(--accent3);padding:0.6rem 0.8rem;font-family:'Share Tech Mono',monospace;
+            font-size:0.8rem;margin-bottom:1rem;
+        }
+        .flash::before{content:'[!] ';}
+        #pwd-rules{
+            margin:-0.5rem 0 1rem;font-family:'Share Tech Mono',monospace;
+            font-size:0.68rem;line-height:1.8;
+        }
+    </style>
+</head>
+<body>
+<div class="setup-box">
+    <div class="corner corner-tl"></div>
+    <div class="corner corner-tr"></div>
+    <div class="corner corner-bl"></div>
+    <div class="corner corner-br"></div>
+
+    <div class="logo">ACMD<span>_</span></div>
+    <div class="subtitle">INITIAL SETUP — PREMIER DÉPLOIEMENT</div>
+
+    <div class="setup-banner">
+        <strong>⚙ CONFIGURATION INITIALE</strong>
+        Aucun compte n'existe sur cette instance. Créez le compte administrateur
+        qui aura accès à toutes les fonctionnalités et à la gestion des utilisateurs.
+        Cette page sera inaccessible une fois le compte créé.
+    </div>
+
+    {% with messages = get_flashed_messages() %}
+    {% if messages %}{% for m in messages %}<div class="flash">{{ m }}</div>{% endfor %}{% endif %}
+    {% endwith %}
+
+    <form method="POST">
+        <label>// Identifiant administrateur (min 3 chars)</label>
+        <input type="text" name="username" id="username" placeholder="admin" autocomplete="off" required>
+
+        <label>// Mot de passe</label>
+        <input type="password" name="password" id="password" placeholder="••••••••••••" required>
+
+        <div id="pwd-rules">
+            <span id="r-len"   style="color:var(--accent3)">✗ 10 caractères min</span><br>
+            <span id="r-upper" style="color:var(--accent3)">✗ 1 majuscule</span><br>
+            <span id="r-lower" style="color:var(--accent3)">✗ 1 minuscule</span><br>
+            <span id="r-digit" style="color:var(--accent3)">✗ 1 chiffre</span><br>
+            <span id="r-spec"  style="color:var(--accent3)">✗ 1 caractère spécial (!@#$%...)</span>
+        </div>
+
+        <button type="submit" class="btn" id="submitBtn" disabled>
+            [ Créer le compte administrateur ]
+        </button>
+    </form>
+</div>
+
+<script>
+const u   = document.getElementById('username');
+const p   = document.getElementById('password');
+const btn = document.getElementById('submitBtn');
+const rules = {
+    'r-len':   v => v.length >= 10,
+    'r-upper': v => /[A-Z]/.test(v),
+    'r-lower': v => /[a-z]/.test(v),
+    'r-digit': v => /[0-9]/.test(v),
+    'r-spec':  v => /[!@#$%^&*()\-_=+\[\]{}|;:,.<>?/]/.test(v),
+};
+function check() {
+    const val = p.value;
+    let allOk = true;
+    for (const [id, fn] of Object.entries(rules)) {
+        const ok = fn(val);
+        const el = document.getElementById(id);
+        el.style.color  = ok ? 'var(--accent)' : 'var(--accent3)';
+        el.textContent  = (ok ? '✓ ' : '✗ ') + el.textContent.slice(2);
+        if (!ok) allOk = false;
+    }
+    btn.disabled = !u.value.trim() || !allOk;
+}
+u.addEventListener('input', check);
+p.addEventListener('input', check);
+</script>
+</body>
+</html>

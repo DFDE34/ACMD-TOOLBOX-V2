@@ -22,6 +22,12 @@ def get_db():
     conn.row_factory = sqlite3.Row
     return conn
 
+def get_setting(key, default=''):
+    db = get_db()
+    row = db.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
+    db.close()
+    return row['value'] if row else default
+
 def init_db():
     db = get_db()
     db.executescript('''
@@ -47,6 +53,10 @@ def init_db():
         if first:
             db.execute("UPDATE users SET role='admin' WHERE id=?", (first['id'],))
             db.commit()
+    # ── Table settings (clé/valeur pour la configuration de la plateforme) ─
+    db.execute("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+    db.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('registration_open', '1')")
+    db.commit()
     existing = db.execute("SELECT COUNT(*) FROM scan_tools WHERE is_builtin=1").fetchone()[0]
     if existing == 0:
         builtins = [
@@ -137,6 +147,18 @@ def inject_nav():
             pass
     return {'nav_links': nav, 'current_role': getattr(current_user, 'role', None)}
 
+@app.before_request
+def check_setup_required():
+    """Si aucun utilisateur n'existe encore, rediriger vers le wizard de setup."""
+    if request.endpoint in ('setup', 'static', None):
+        return
+    db = get_db()
+    count = db.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+    db.close()
+    if count == 0:
+        return redirect(url_for('setup'))
+
+
 @app.route('/')
 def index():
     return redirect(url_for('dashboard') if current_user.is_authenticated else url_for('login'))
@@ -160,6 +182,9 @@ def login():
 
 @app.route('/register', methods=['GET','POST'])
 def register():
+    if get_setting('registration_open', '1') == '0':
+        flash("L'inscription est actuellement désactivée. Contactez un administrateur.")
+        return render_template('register.html', registration_closed=True)
     if request.method == 'POST':
         username = request.form['username'].strip()
         password = request.form['password']
@@ -190,6 +215,42 @@ def register():
                 return redirect(url_for('login'))
             except: flash("Ce nom d'utilisateur existe déjà.")
     return render_template('register.html')
+
+@app.route('/setup', methods=['GET', 'POST'])
+def setup():
+    """Wizard de premier déploiement — inaccessible une fois le premier compte créé."""
+    db = get_db()
+    count = db.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+    db.close()
+    if count > 0:
+        return redirect(url_for('login'))
+    if request.method == 'POST':
+        username = request.form['username'].strip()
+        password = request.form['password']
+        error = None
+        if len(username) < 3:
+            error = "Le nom d'utilisateur doit contenir au moins 3 caractères."
+        elif len(password) < 10:
+            error = "Le mot de passe doit contenir au moins 10 caractères."
+        elif not re.search(r'[A-Z]', password):
+            error = "Le mot de passe doit contenir au moins une majuscule."
+        elif not re.search(r'[a-z]', password):
+            error = "Le mot de passe doit contenir au moins une minuscule."
+        elif not re.search(r'[0-9]', password):
+            error = "Le mot de passe doit contenir au moins un chiffre."
+        elif not re.search(r'[!@#$%^&*()\-_=+\[\]{}|;:,.<>?/]', password):
+            error = "Le mot de passe doit contenir au moins un caractère spécial (!@#$%...)."
+        if error:
+            flash(error)
+        else:
+            db = get_db()
+            db.execute('INSERT INTO users (username, password, role) VALUES (?,?,?)',
+                       (username, generate_password_hash(password), 'admin'))
+            db.commit(); db.close()
+            flash(f'Compte administrateur "{username}" créé. Connectez-vous.')
+            return redirect(url_for('login'))
+    return render_template('setup.html')
+
 
 @app.route('/logout')
 @login_required
@@ -1193,6 +1254,40 @@ def api_admin_delete_user(user_id):
         db.execute(f'DELETE FROM {table} WHERE user_id=?', (user_id,))
     db.commit(); db.close()
     return jsonify({'ok': True, 'message': f'Compte {target["username"]} supprimé'})
+
+
+@app.route('/api/admin/settings', methods=['GET', 'PUT'])
+@login_required
+@admin_required
+def api_admin_settings():
+    db = get_db()
+    if request.method == 'GET':
+        rows = db.execute("SELECT key, value FROM settings").fetchall()
+        db.close()
+        return jsonify({r['key']: r['value'] for r in rows})
+    data = request.json or {}
+    allowed_keys = {'registration_open'}
+    for key, value in data.items():
+        if key in allowed_keys:
+            db.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?,?)", (key, str(value)))
+    db.commit(); db.close()
+    return jsonify({'ok': True, 'message': 'Paramètres mis à jour'})
+
+
+@app.route('/api/admin/stats', methods=['GET'])
+@login_required
+@admin_required
+def api_admin_stats():
+    db = get_db()
+    stats = {
+        'total':  db.execute("SELECT COUNT(*) FROM users").fetchone()[0],
+        'admin':  db.execute("SELECT COUNT(*) FROM users WHERE role='admin'").fetchone()[0],
+        'tech':   db.execute("SELECT COUNT(*) FROM users WHERE role='tech'").fetchone()[0],
+        'user':   db.execute("SELECT COUNT(*) FROM users WHERE role='user'").fetchone()[0],
+        'active': db.execute("SELECT COUNT(*) FROM users WHERE active=1").fetchone()[0],
+    }
+    db.close()
+    return jsonify(stats)
 
 
 @app.errorhandler(403)

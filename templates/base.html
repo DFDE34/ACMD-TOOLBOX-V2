@@ -229,6 +229,10 @@
     </div>
     <div style="display:flex;align-items:center;gap:1rem;">
         <span class="nav-user">{{ current_user.username }}</span>
+        {% if current_role %}
+        <span class="tag {% if current_role == 'admin' %}tag-red{% elif current_role == 'tech' %}tag-blue{% else %}tag-green{% endif %}"
+              style="font-size:0.62rem;letter-spacing:1px;">{{ current_role|upper }}</span>
+        {% endif %}
         <a href="{{ url_for('logout') }}" class="btn-logout">EXIT</a>
     </div>
 </nav>

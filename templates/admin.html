@@ -1,147 +1,300 @@
 {% extends "base.html" %}
 {% block title %}Administration — ACMD Toolbox{% endblock %}
+{% block head %}
+<style>
+.role-badge {
+    font-family:'Share Tech Mono',monospace; font-size:0.65rem;
+    padding:2px 8px; border:1px solid; letter-spacing:1px; display:inline-block;
+}
+.role-admin { border-color:var(--accent3); color:var(--accent3); }
+.role-tech  { border-color:var(--accent2); color:var(--accent2); }
+.role-user  { border-color:var(--text-dim); color:var(--text-dim); }
+.status-on  { color:var(--accent);  font-weight:600; }
+.status-off { color:var(--accent3); font-weight:600; }
+.user-row   { border-bottom:1px solid var(--border); transition:background 0.15s; }
+.user-row:hover { background:rgba(0,255,136,0.025); }
+.action-btn {
+    padding:0.2rem 0.6rem; font-family:'Share Tech Mono',monospace;
+    font-size:0.72rem; cursor:pointer; border:1px solid; background:transparent;
+    transition:all 0.2s; white-space:nowrap;
+}
+.action-btn:disabled { opacity:0.3; cursor:not-allowed; }
+.btn-toggle { border-color:var(--border); color:var(--text-dim); }
+.btn-toggle:not(:disabled):hover { border-color:var(--accent2); color:var(--accent2); }
+.btn-delete { border-color:rgba(255,51,102,0.4); color:var(--accent3); }
+.btn-delete:not(:disabled):hover { background:rgba(255,51,102,0.1); }
+.toast {
+    position:fixed; bottom:1.5rem; right:1.5rem; padding:0.75rem 1.25rem;
+    font-family:'Share Tech Mono',monospace; font-size:0.8rem;
+    background:var(--bg2); border:1px solid; z-index:2000;
+    transform:translateX(120%); transition:transform 0.3s;
+}
+.toast.show   { transform:translateX(0); }
+.toast.ok     { border-color:var(--accent);  color:var(--accent); }
+.toast.err    { border-color:var(--accent3); color:var(--accent3); }
+.toggle-switch {
+    position:relative; display:inline-block; width:42px; height:22px; cursor:pointer;
+}
+.toggle-switch input { opacity:0; width:0; height:0; }
+.toggle-track {
+    position:absolute; inset:0; background:var(--bg3); border:1px solid var(--border);
+    border-radius:22px; transition:0.2s;
+}
+.toggle-track::before {
+    content:''; position:absolute; height:14px; width:14px;
+    left:3px; bottom:3px; background:var(--text-dim);
+    border-radius:50%; transition:0.2s;
+}
+input:checked + .toggle-track { border-color:var(--accent); }
+input:checked + .toggle-track::before { transform:translateX(20px); background:var(--accent); }
+</style>
+{% endblock %}
 {% block content %}
-<div style="max-width:900px;margin:2rem auto;">
 
-  <h1 style="font-family:'Orbitron',monospace;font-size:1rem;letter-spacing:4px;color:var(--accent);font-weight:400;margin-bottom:0.3rem;">
-    // <span style="font-weight:900;">ADMINISTRATION</span>
-  </h1>
-  <p style="font-family:'Share Tech Mono',monospace;font-size:0.78rem;color:var(--text-dim);margin-bottom:1.5rem;">
-    Gestion des rôles et des accès. Réservé aux administrateurs.
-  </p>
-
-  <p id="admin-msg" style="display:none;padding:0.6rem 0.9rem;font-family:'Share Tech Mono',monospace;font-size:0.8rem;margin-bottom:1rem;border:1px solid;"></p>
-
-  <table style="width:100%;border-collapse:collapse;font-family:'Share Tech Mono',monospace;font-size:0.8rem;">
-    <thead>
-      <tr style="background:var(--bg3);color:var(--accent2);text-align:left;border-bottom:1px solid var(--border);">
-        <th style="padding:0.6rem 0.8rem;">Utilisateur</th>
-        <th style="padding:0.6rem 0.8rem;">Rôle</th>
-        <th style="padding:0.6rem 0.8rem;">Statut</th>
-        <th style="padding:0.6rem 0.8rem;">Créé le</th>
-        <th style="padding:0.6rem 0.8rem;">Actions</th>
-      </tr>
-    </thead>
-    <tbody id="users-tbody">
-      {% for u in users %}
-      <tr data-id="{{ u.id }}" style="border-bottom:1px solid var(--border);">
-        <td style="padding:0.6rem 0.8rem;font-weight:600;color:var(--text);">
-          {{ u.username }}
-          {% if u.id == current_user.id %}
-            <span style="color:var(--text-dim);font-size:0.68rem;">(vous)</span>
-          {% endif %}
-        </td>
-        <td style="padding:0.6rem 0.8rem;">
-          <select class="role-select"
-                  {% if u.id == current_user.id %}disabled{% endif %}
-                  style="background:var(--bg2);color:var(--text);border:1px solid var(--border);
-                         padding:0.25rem 0.5rem;font-family:'Share Tech Mono',monospace;font-size:0.78rem;">
-            <option value="user"  {% if u.role == 'user'  %}selected{% endif %}>user</option>
-            <option value="tech"  {% if u.role == 'tech'  %}selected{% endif %}>tech</option>
-            <option value="admin" {% if u.role == 'admin' %}selected{% endif %}>admin</option>
-          </select>
-        </td>
-        <td style="padding:0.6rem 0.8rem;">
-          <span class="status-badge"
-                style="color:{{ '#00ff88' if u.active else '#ff3366' }};font-weight:600;">
-            {{ 'actif' if u.active else 'désactivé' }}
-          </span>
-        </td>
-        <td style="padding:0.6rem 0.8rem;color:var(--text-dim);font-size:0.75rem;">
-          {{ (u.created_at or '')[:16] }}
-        </td>
-        <td style="padding:0.6rem 0.8rem;display:flex;gap:0.4rem;">
-          <button class="toggle-active-btn"
-                  {% if u.id == current_user.id %}disabled{% endif %}
-                  style="padding:0.25rem 0.6rem;background:var(--bg3);color:var(--text);
-                         border:1px solid var(--border);cursor:pointer;
-                         font-family:'Share Tech Mono',monospace;font-size:0.75rem;">
-            {{ 'Désactiver' if u.active else 'Activer' }}
-          </button>
-          <button class="delete-btn"
-                  {% if u.id == current_user.id %}disabled{% endif %}
-                  style="padding:0.25rem 0.6rem;background:rgba(255,51,102,0.1);
-                         color:var(--accent3);border:1px solid var(--accent3);
-                         cursor:pointer;font-family:'Share Tech Mono',monospace;font-size:0.75rem;">
-            Supprimer
-          </button>
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-
-  <div style="margin-top:2rem;background:rgba(0,204,255,0.05);border:1px solid rgba(0,204,255,0.2);
-              padding:0.75rem 1rem;font-family:'Share Tech Mono',monospace;font-size:0.75rem;color:var(--accent2);">
-    ℹ Rôles : <b>admin</b> = accès total + gestion des comptes &nbsp;|&nbsp;
-    <b>tech</b> = lancer des scans, workflows, outils &nbsp;|&nbsp;
-    <b>user</b> = consultation uniquement (Fast Tools, historique, rapport)
-  </div>
+<div style="margin-bottom:1.5rem;">
+    <h1 style="font-family:'Orbitron',monospace;font-size:1rem;letter-spacing:4px;color:var(--accent);font-weight:400;">
+        // <span style="font-weight:900;">ADMINISTRATION</span>
+    </h1>
+    <p style="font-family:'Share Tech Mono',monospace;font-size:0.75rem;color:var(--text-dim);margin-top:0.25rem;">
+        Gestion des rôles, des accès et de la configuration de la plateforme.
+    </p>
 </div>
 
+<!-- Stats bar (chargées en JS) -->
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:1rem;margin-bottom:2rem;" id="stats-row">
+    <div class="card" style="text-align:center;border-color:rgba(255,51,102,0.3);">
+        <div id="stat-admin" style="font-family:'Orbitron',monospace;font-size:1.8rem;color:var(--accent3);font-weight:900;">—</div>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:0.62rem;color:var(--text-dim);letter-spacing:2px;margin-top:0.3rem;">ADMINS</div>
+    </div>
+    <div class="card" style="text-align:center;border-color:rgba(0,204,255,0.3);">
+        <div id="stat-tech" style="font-family:'Orbitron',monospace;font-size:1.8rem;color:var(--accent2);font-weight:900;">—</div>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:0.62rem;color:var(--text-dim);letter-spacing:2px;margin-top:0.3rem;">TECH</div>
+    </div>
+    <div class="card" style="text-align:center;border-color:rgba(0,255,136,0.2);">
+        <div id="stat-user" style="font-family:'Orbitron',monospace;font-size:1.8rem;color:var(--accent);font-weight:900;">—</div>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:0.62rem;color:var(--text-dim);letter-spacing:2px;margin-top:0.3rem;">USERS</div>
+    </div>
+    <div class="card" style="text-align:center;border-color:rgba(26,58,74,0.8);">
+        <div id="stat-active" style="font-family:'Orbitron',monospace;font-size:1.8rem;color:var(--text);font-weight:900;">—</div>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:0.62rem;color:var(--text-dim);letter-spacing:2px;margin-top:0.3rem;">ACTIFS</div>
+    </div>
+</div>
+
+<div class="grid-2" style="gap:1.5rem;align-items:start;">
+
+    <!-- Tableau des utilisateurs -->
+    <div class="card" style="grid-column:1 / -1;">
+        <div class="card-title">Comptes utilisateurs</div>
+        <table style="width:100%;border-collapse:collapse;">
+            <thead>
+                <tr style="font-family:'Share Tech Mono',monospace;font-size:0.7rem;color:var(--text-dim);letter-spacing:1px;text-transform:uppercase;">
+                    <th style="padding:0.5rem 0.75rem;text-align:left;font-weight:400;border-bottom:1px solid var(--border);">Utilisateur</th>
+                    <th style="padding:0.5rem 0.75rem;text-align:left;font-weight:400;border-bottom:1px solid var(--border);">Rôle</th>
+                    <th style="padding:0.5rem 0.75rem;text-align:left;font-weight:400;border-bottom:1px solid var(--border);">Statut</th>
+                    <th style="padding:0.5rem 0.75rem;text-align:left;font-weight:400;border-bottom:1px solid var(--border);">Créé le</th>
+                    <th style="padding:0.5rem 0.75rem;text-align:left;font-weight:400;border-bottom:1px solid var(--border);">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for u in users %}
+            <tr class="user-row" data-id="{{ u.id }}" data-self="{{ 'true' if u.id == current_user.id else 'false' }}">
+                <td style="padding:0.6rem 0.75rem;font-family:'Share Tech Mono',monospace;font-size:0.82rem;color:var(--text);">
+                    {{ u.username }}
+                    {% if u.id == current_user.id %}
+                    <span style="color:var(--text-dim);font-size:0.65rem;"> (vous)</span>
+                    {% endif %}
+                </td>
+                <td style="padding:0.6rem 0.75rem;">
+                    <select class="role-select"
+                            {% if u.id == current_user.id %}disabled{% endif %}
+                            style="background:var(--bg3);color:var(--text);border:1px solid var(--border);
+                                   padding:0.2rem 0.4rem;font-family:'Share Tech Mono',monospace;
+                                   font-size:0.75rem;width:auto;margin:0;">
+                        <option value="user"  {% if u.role == 'user'  %}selected{% endif %}>user</option>
+                        <option value="tech"  {% if u.role == 'tech'  %}selected{% endif %}>tech</option>
+                        <option value="admin" {% if u.role == 'admin' %}selected{% endif %}>admin</option>
+                    </select>
+                    <span class="role-badge role-{{ u.role }}" style="margin-left:0.4rem;">{{ u.role|upper }}</span>
+                </td>
+                <td style="padding:0.6rem 0.75rem;">
+                    <span class="status-badge {{ 'status-on' if u.active else 'status-off' }}">
+                        {{ 'ACTIF' if u.active else 'DÉSACTIVÉ' }}
+                    </span>
+                </td>
+                <td style="padding:0.6rem 0.75rem;font-family:'Share Tech Mono',monospace;font-size:0.72rem;color:var(--text-dim);">
+                    {{ (u.created_at or '')[:16] }}
+                </td>
+                <td style="padding:0.6rem 0.75rem;">
+                    <div style="display:flex;gap:0.4rem;">
+                        <button class="action-btn btn-toggle toggle-active-btn"
+                                {% if u.id == current_user.id %}disabled{% endif %}>
+                            {{ 'Désactiver' if u.active else 'Activer' }}
+                        </button>
+                        <button class="action-btn btn-delete delete-btn"
+                                {% if u.id == current_user.id %}disabled{% endif %}>
+                            Supprimer
+                        </button>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Configuration de la plateforme -->
+    <div class="card">
+        <div class="card-title">Configuration</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:0.75rem 0;border-bottom:1px solid var(--border);">
+            <div>
+                <div style="font-family:'Share Tech Mono',monospace;font-size:0.8rem;color:var(--text);margin-bottom:0.2rem;">
+                    Inscription ouverte
+                </div>
+                <div style="font-family:'Share Tech Mono',monospace;font-size:0.7rem;color:var(--text-dim);">
+                    Autoriser les nouveaux utilisateurs à s'inscrire
+                </div>
+            </div>
+            <label class="toggle-switch" title="Activer/désactiver l'inscription">
+                <input type="checkbox" id="reg-toggle">
+                <span class="toggle-track"></span>
+            </label>
+        </div>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:0.7rem;color:var(--text-dim);margin-top:0.75rem;line-height:1.6;">
+            Désactiver l'inscription empêche tout nouveau compte d'être créé.
+            Les comptes existants ne sont pas affectés.
+        </div>
+    </div>
+
+    <!-- Légende des rôles -->
+    <div class="card">
+        <div class="card-title">Rôles & permissions</div>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:0.78rem;line-height:2;">
+            <div><span class="role-badge role-admin">ADMIN</span>
+                <span style="color:var(--text-dim);margin-left:0.6rem;">Accès total + gestion des comptes</span></div>
+            <div><span class="role-badge role-tech">TECH</span>
+                <span style="color:var(--text-dim);margin-left:0.6rem;">Scans, workflows, outils custom</span></div>
+            <div><span class="role-badge role-user">USER</span>
+                <span style="color:var(--text-dim);margin-left:0.6rem;">Consultation : fast tools, historique, rapport</span></div>
+        </div>
+    </div>
+
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
 <script>
-function showMsg(text, ok) {
-  const el = document.getElementById('admin-msg');
-  el.textContent = text;
-  el.style.background = ok ? 'rgba(0,255,136,0.08)' : 'rgba(255,51,102,0.08)';
-  el.style.color       = ok ? 'var(--accent)'       : 'var(--accent3)';
-  el.style.borderColor = ok ? 'var(--accent)'       : 'var(--accent3)';
-  el.style.display = 'block';
-  setTimeout(() => { el.style.display = 'none'; }, 5000);
+function toast(msg, ok = true) {
+    const el = document.getElementById('toast');
+    el.textContent = (ok ? '[OK] ' : '[!] ') + msg;
+    el.className = 'toast show ' + (ok ? 'ok' : 'err');
+    clearTimeout(el._t);
+    el._t = setTimeout(() => { el.classList.remove('show'); }, 4000);
 }
 
+// ── Charger les stats ────────────────────────────────────────────────────
+fetch('/api/admin/stats')
+    .then(r => r.json())
+    .then(d => {
+        document.getElementById('stat-admin').textContent  = d.admin;
+        document.getElementById('stat-tech').textContent   = d.tech;
+        document.getElementById('stat-user').textContent   = d.user;
+        document.getElementById('stat-active').textContent = d.active;
+    });
+
+// ── Charger le paramètre registration_open ───────────────────────────────
+fetch('/api/admin/settings')
+    .then(r => r.json())
+    .then(d => {
+        document.getElementById('reg-toggle').checked = d.registration_open === '1';
+    });
+
+document.getElementById('reg-toggle').addEventListener('change', async function () {
+    try {
+        const res  = await fetch('/api/admin/settings', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ registration_open: this.checked ? '1' : '0' })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        toast(this.checked ? 'Inscription activée' : 'Inscription désactivée', true);
+    } catch (err) { toast(err.message, false); }
+});
+
+// ── Changement de rôle ───────────────────────────────────────────────────
 document.querySelectorAll('.role-select').forEach(sel => {
-  sel.addEventListener('change', async function () {
-    const id = this.closest('tr').dataset.id;
-    try {
-      const res  = await fetch(`/api/admin/users/${id}/role`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role: this.value })
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      showMsg(data.message, true);
-    } catch (err) { showMsg(err.message, false); }
-  });
+    sel.addEventListener('change', async function () {
+        const row    = this.closest('tr');
+        const id     = row.dataset.id;
+        const badge  = row.querySelector('.role-badge');
+        const oldVal = [...this.options].find(o => o.defaultSelected)?.value || '';
+        try {
+            const res  = await fetch(`/api/admin/users/${id}/role`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ role: this.value })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error);
+            toast(data.message, true);
+            // Mettre à jour le badge
+            badge.className = `role-badge role-${this.value}`;
+            badge.textContent = this.value.toUpperCase();
+            // Marquer la nouvelle valeur comme défaut
+            [...this.options].forEach(o => { o.defaultSelected = (o.value === this.value); });
+        } catch (err) {
+            toast(err.message, false);
+            this.value = oldVal; // Annuler le changement visuel
+        }
+    });
 });
 
+// ── Toggle actif/désactivé ───────────────────────────────────────────────
 document.querySelectorAll('.toggle-active-btn').forEach(btn => {
-  btn.addEventListener('click', async function () {
-    const row    = this.closest('tr');
-    const id     = row.dataset.id;
-    const badge  = row.querySelector('.status-badge');
-    const isActive = badge.textContent.trim() === 'actif';
-    try {
-      const res  = await fetch(`/api/admin/users/${id}/active`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ active: !isActive })
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      showMsg(data.message, true);
-      badge.textContent    = isActive ? 'désactivé' : 'actif';
-      badge.style.color    = isActive ? 'var(--accent3)' : 'var(--accent)';
-      this.textContent     = isActive ? 'Activer' : 'Désactiver';
-    } catch (err) { showMsg(err.message, false); }
-  });
+    btn.addEventListener('click', async function () {
+        const row      = this.closest('tr');
+        const id       = row.dataset.id;
+        const badge    = row.querySelector('.status-badge');
+        const isActive = badge.classList.contains('status-on');
+        try {
+            const res  = await fetch(`/api/admin/users/${id}/active`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ active: !isActive })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error);
+            toast(data.message, true);
+            badge.textContent  = isActive ? 'DÉSACTIVÉ' : 'ACTIF';
+            badge.className    = 'status-badge ' + (isActive ? 'status-off' : 'status-on');
+            this.textContent   = isActive ? 'Activer' : 'Désactiver';
+        } catch (err) { toast(err.message, false); }
+    });
 });
 
+// ── Suppression ──────────────────────────────────────────────────────────
 document.querySelectorAll('.delete-btn').forEach(btn => {
-  btn.addEventListener('click', async function () {
-    const row      = this.closest('tr');
-    const id       = row.dataset.id;
-    const username = row.querySelector('td').textContent.trim().split('\n')[0].trim();
-    if (!confirm(`Supprimer définitivement le compte "${username}" et toutes ses données ?`)) return;
-    try {
-      const res  = await fetch(`/api/admin/users/${id}`, { method: 'DELETE' });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      showMsg(data.message, true);
-      row.remove();
-    } catch (err) { showMsg(err.message, false); }
-  });
+    btn.addEventListener('click', async function () {
+        const row      = this.closest('tr');
+        const id       = row.dataset.id;
+        const username = row.querySelector('td').textContent.trim().split('\n')[0].trim();
+        if (!confirm(`Supprimer définitivement "${username}" et toutes ses données ?`)) return;
+        try {
+            const res  = await fetch(`/api/admin/users/${id}`, { method: 'DELETE' });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error);
+            toast(data.message, true);
+            row.remove();
+            // Recharger les stats
+            fetch('/api/admin/stats').then(r => r.json()).then(d => {
+                document.getElementById('stat-admin').textContent  = d.admin;
+                document.getElementById('stat-tech').textContent   = d.tech;
+                document.getElementById('stat-user').textContent   = d.user;
+                document.getElementById('stat-active').textContent = d.active;
+            });
+        } catch (err) { toast(err.message, false); }
+    });
 });
 </script>
 {% endblock %}
