@@ -93,7 +93,22 @@
                 </div>
             </div>
 
-            <div style="color:var(--accent3);font-size:0.75rem;">⚠ Sans placeholder, si la cible est une URL le hostname est extrait automatiquement pour les outils réseau. Timeout : 5 minutes.</div>
+            <!-- Mode sans placeholder -->
+            <div style="background:var(--bg3);border:1px solid rgba(0,255,136,0.15);padding:0.75rem;margin-bottom:0.5rem;">
+                <div style="color:var(--accent);font-size:0.7rem;letter-spacing:1px;margin-bottom:0.5rem;">MODE SANS PLACEHOLDER — cible ajoutée automatiquement</div>
+                <div style="font-size:0.75rem;color:var(--text-dim);margin-bottom:0.5rem;line-height:1.6;">
+                    Si la commande ne contient aucun placeholder, la cible est insérée automatiquement
+                    juste après la commande, avant les options.
+                    Si la cible est une URL (<code style="color:var(--accent2);">https://…</code>), seul le hostname est extrait.
+                </div>
+                <div style="display:grid;grid-template-columns:auto 1fr;gap:0.2rem 1rem;font-size:0.72rem;">
+                    <span style="color:var(--text-dim);">Commande :</span> <span style="color:var(--accent);">nikto -h</span>
+                    <span style="color:var(--text-dim);">Options   :</span> <span style="color:var(--accent);">-Tuning 1</span>
+                    <span style="color:var(--text-dim);">Cible     :</span> <span style="color:var(--accent2);">192.168.1.1</span>
+                    <span style="color:var(--text-dim);">Exécuté   :</span> <span style="color:var(--accent);">nikto -h 192.168.1.1 -Tuning 1</span>
+                </div>
+            </div>
+            <div style="color:var(--accent3);font-size:0.75rem;">⚠ Timeout : 5 minutes.</div>
         </div>
     </div>
 </div>
