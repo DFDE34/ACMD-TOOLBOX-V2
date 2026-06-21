@@ -1,8 +1,8 @@
 """
-run.py — Lanceur WSGI universel pour ACMD Toolbox V2
+run.py — Lanceur pour ACMD Toolbox V2
 
   Linux / macOS / Kali  →  Gunicorn  (multi-worker, production-grade)
-  Windows               →  Waitress  (pur Python, compatible Windows)
+  Windows               →  python app.py  (serveur Flask intégré)
 
 Variables d'environnement :
   HOST     adresse d'écoute        (défaut : 0.0.0.0)
@@ -26,17 +26,10 @@ BANNER = f"""
 """
 
 if sys.platform.startswith('win'):
-    # ── Windows : Waitress ────────────────────────────────────────────────
-    try:
-        from waitress import serve
-    except ImportError:
-        print("[ERREUR] Waitress non installé.")
-        print("         Exécutez : pip install waitress")
-        sys.exit(1)
-
+    # ── Windows : serveur Flask intégré (même méthode que python app.py) ──
     from app import app
-    print(BANNER + "  Serveur  →  Waitress (Windows)\n")
-    serve(app, host=HOST, port=int(PORT), threads=8)
+    print(BANNER + "  Serveur  →  Flask dev (Windows)\n")
+    app.run(host=HOST, port=int(PORT), debug=True, threaded=True)
 
 else:
     # ── Linux / macOS / Kali : Gunicorn ──────────────────────────────────
