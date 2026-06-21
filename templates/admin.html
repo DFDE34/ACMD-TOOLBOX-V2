@@ -6,9 +6,11 @@
     font-family:'Share Tech Mono',monospace; font-size:0.65rem;
     padding:2px 8px; border:1px solid; letter-spacing:1px; display:inline-block;
 }
-.role-admin { border-color:var(--accent3); color:var(--accent3); }
-.role-tech  { border-color:var(--accent2); color:var(--accent2); }
-.role-user  { border-color:var(--text-dim); color:var(--text-dim); }
+.role-admin   { border-color:var(--accent3); color:var(--accent3); }
+.role-tech    { border-color:var(--accent2); color:var(--accent2); }
+.role-user    { border-color:var(--text-dim); color:var(--text-dim); }
+.role-pending { border-color:#9a6700; color:#e8a000; }
+.row-pending  { background:rgba(154,103,0,0.07) !important; }
 .status-on  { color:var(--accent);  font-weight:600; }
 .status-off { color:var(--accent3); font-weight:600; }
 .user-row   { border-bottom:1px solid var(--border); transition:background 0.15s; }
@@ -61,7 +63,7 @@ input:checked + .toggle-track::before { transform:translateX(20px); background:v
 </div>
 
 <!-- Stats bar (chargées en JS) -->
-<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:1rem;margin-bottom:2rem;" id="stats-row">
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:1rem;margin-bottom:2rem;">
     <div class="card" style="text-align:center;border-color:rgba(255,51,102,0.3);">
         <div id="stat-admin" style="font-family:'Orbitron',monospace;font-size:1.8rem;color:var(--accent3);font-weight:900;">—</div>
         <div style="font-family:'Share Tech Mono',monospace;font-size:0.62rem;color:var(--text-dim);letter-spacing:2px;margin-top:0.3rem;">ADMINS</div>
@@ -73,6 +75,10 @@ input:checked + .toggle-track::before { transform:translateX(20px); background:v
     <div class="card" style="text-align:center;border-color:rgba(0,255,136,0.2);">
         <div id="stat-user" style="font-family:'Orbitron',monospace;font-size:1.8rem;color:var(--accent);font-weight:900;">—</div>
         <div style="font-family:'Share Tech Mono',monospace;font-size:0.62rem;color:var(--text-dim);letter-spacing:2px;margin-top:0.3rem;">USERS</div>
+    </div>
+    <div class="card" style="text-align:center;border-color:rgba(154,103,0,0.5);">
+        <div id="stat-pending" style="font-family:'Orbitron',monospace;font-size:1.8rem;color:#e8a000;font-weight:900;">—</div>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:0.62rem;color:var(--text-dim);letter-spacing:2px;margin-top:0.3rem;">EN ATTENTE</div>
     </div>
     <div class="card" style="text-align:center;border-color:rgba(26,58,74,0.8);">
         <div id="stat-active" style="font-family:'Orbitron',monospace;font-size:1.8rem;color:var(--text);font-weight:900;">—</div>
@@ -97,7 +103,8 @@ input:checked + .toggle-track::before { transform:translateX(20px); background:v
             </thead>
             <tbody>
             {% for u in users %}
-            <tr class="user-row" data-id="{{ u.id }}" data-self="{{ 'true' if u.id == current_user.id else 'false' }}">
+            <tr class="user-row {% if u.role == 'pending' %}row-pending{% endif %}"
+                data-id="{{ u.id }}" data-self="{{ 'true' if u.id == current_user.id else 'false' }}">
                 <td style="padding:0.6rem 0.75rem;font-family:'Share Tech Mono',monospace;font-size:0.82rem;color:var(--text);">
                     {{ u.username }}
                     {% if u.id == current_user.id %}
@@ -110,11 +117,14 @@ input:checked + .toggle-track::before { transform:translateX(20px); background:v
                             style="background:var(--bg3);color:var(--text);border:1px solid var(--border);
                                    padding:0.2rem 0.4rem;font-family:'Share Tech Mono',monospace;
                                    font-size:0.75rem;width:auto;margin:0;">
-                        <option value="user"  {% if u.role == 'user'  %}selected{% endif %}>user</option>
-                        <option value="tech"  {% if u.role == 'tech'  %}selected{% endif %}>tech</option>
-                        <option value="admin" {% if u.role == 'admin' %}selected{% endif %}>admin</option>
+                        <option value="pending" {% if u.role == 'pending' %}selected{% endif %}>pending</option>
+                        <option value="user"    {% if u.role == 'user'    %}selected{% endif %}>user</option>
+                        <option value="tech"    {% if u.role == 'tech'    %}selected{% endif %}>tech</option>
+                        <option value="admin"   {% if u.role == 'admin'   %}selected{% endif %}>admin</option>
                     </select>
-                    <span class="role-badge role-{{ u.role }}" style="margin-left:0.4rem;">{{ u.role|upper }}</span>
+                    <span class="role-badge role-{{ u.role }}" style="margin-left:0.4rem;">
+                        {{ u.role|upper }}{% if u.role == 'pending' %} ⏳{% endif %}
+                    </span>
                 </td>
                 <td style="padding:0.6rem 0.75rem;">
                     <span class="status-badge {{ 'status-on' if u.active else 'status-off' }}">
@@ -168,13 +178,15 @@ input:checked + .toggle-track::before { transform:translateX(20px); background:v
     <!-- Légende des rôles -->
     <div class="card">
         <div class="card-title">Rôles & permissions</div>
-        <div style="font-family:'Share Tech Mono',monospace;font-size:0.78rem;line-height:2;">
+        <div style="font-family:'Share Tech Mono',monospace;font-size:0.78rem;line-height:2.2;">
+            <div><span class="role-badge role-pending">PENDING</span>
+                <span style="color:var(--text-dim);margin-left:0.6rem;">Aucun accès — en attente d'attribution</span></div>
+            <div><span class="role-badge role-user">USER</span>
+                <span style="color:var(--text-dim);margin-left:0.6rem;">Dashboard, fast tools, historique, rapport, OWASP</span></div>
+            <div><span class="role-badge role-tech">TECH</span>
+                <span style="color:var(--text-dim);margin-left:0.6rem;">+ Scans, workflows, outils custom, installation</span></div>
             <div><span class="role-badge role-admin">ADMIN</span>
                 <span style="color:var(--text-dim);margin-left:0.6rem;">Accès total + gestion des comptes</span></div>
-            <div><span class="role-badge role-tech">TECH</span>
-                <span style="color:var(--text-dim);margin-left:0.6rem;">Scans, workflows, outils custom</span></div>
-            <div><span class="role-badge role-user">USER</span>
-                <span style="color:var(--text-dim);margin-left:0.6rem;">Consultation : fast tools, historique, rapport</span></div>
         </div>
     </div>
 
@@ -193,14 +205,16 @@ function toast(msg, ok = true) {
 }
 
 // ── Charger les stats ────────────────────────────────────────────────────
-fetch('/api/admin/stats')
-    .then(r => r.json())
-    .then(d => {
-        document.getElementById('stat-admin').textContent  = d.admin;
-        document.getElementById('stat-tech').textContent   = d.tech;
-        document.getElementById('stat-user').textContent   = d.user;
-        document.getElementById('stat-active').textContent = d.active;
+function loadStats() {
+    fetch('/api/admin/stats').then(r => r.json()).then(d => {
+        document.getElementById('stat-admin').textContent   = d.admin;
+        document.getElementById('stat-tech').textContent    = d.tech;
+        document.getElementById('stat-user').textContent    = d.user;
+        document.getElementById('stat-pending').textContent = d.pending;
+        document.getElementById('stat-active').textContent  = d.active;
     });
+}
+loadStats();
 
 // ── Charger le paramètre registration_open ───────────────────────────────
 fetch('/api/admin/settings')
@@ -238,11 +252,11 @@ document.querySelectorAll('.role-select').forEach(sel => {
             const data = await res.json();
             if (!res.ok) throw new Error(data.error);
             toast(data.message, true);
-            // Mettre à jour le badge
-            badge.className = `role-badge role-${this.value}`;
-            badge.textContent = this.value.toUpperCase();
-            // Marquer la nouvelle valeur comme défaut
+            badge.className   = `role-badge role-${this.value}`;
+            badge.textContent = this.value.toUpperCase() + (this.value === 'pending' ? ' ⏳' : '');
+            row.classList.toggle('row-pending', this.value === 'pending');
             [...this.options].forEach(o => { o.defaultSelected = (o.value === this.value); });
+            loadStats();
         } catch (err) {
             toast(err.message, false);
             this.value = oldVal; // Annuler le changement visuel
@@ -286,13 +300,7 @@ document.querySelectorAll('.delete-btn').forEach(btn => {
             if (!res.ok) throw new Error(data.error);
             toast(data.message, true);
             row.remove();
-            // Recharger les stats
-            fetch('/api/admin/stats').then(r => r.json()).then(d => {
-                document.getElementById('stat-admin').textContent  = d.admin;
-                document.getElementById('stat-tech').textContent   = d.tech;
-                document.getElementById('stat-user').textContent   = d.user;
-                document.getElementById('stat-active').textContent = d.active;
-            });
+            loadStats();
         } catch (err) { toast(err.message, false); }
     });
 });

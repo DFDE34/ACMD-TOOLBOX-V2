@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}En attente — ACMD Toolbox{% endblock %}
+{% block head %}
+<style>
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+.pulse { animation: pulse 2s ease-in-out infinite; }
+</style>
+{% endblock %}
+{% block content %}
+<div style="max-width:520px;margin:6rem auto;text-align:center;">
+
+    <div style="font-family:'Orbitron',monospace;font-size:2.5rem;font-weight:900;
+                color:#e8a000;text-shadow:0 0 30px rgba(232,160,0,0.4);letter-spacing:4px;
+                margin-bottom:0.5rem;" class="pulse">
+        ⏳
+    </div>
+
+    <h1 style="font-family:'Orbitron',monospace;font-size:1rem;letter-spacing:4px;
+               color:#e8a000;font-weight:400;margin-bottom:0.4rem;">
+        // <span style="font-weight:900;">EN ATTENTE</span>
+    </h1>
+
+    <div style="font-family:'Share Tech Mono',monospace;font-size:0.72rem;
+                color:var(--text-dim);letter-spacing:2px;margin-bottom:2.5rem;">
+        ACCÈS RESTREINT — ATTRIBUTION DE RÔLE REQUISE
+    </div>
+
+    <div style="background:rgba(154,103,0,0.08);border:1px solid rgba(154,103,0,0.4);
+                padding:1.5rem 2rem;text-align:left;margin-bottom:2rem;">
+        <div style="font-family:'Share Tech Mono',monospace;font-size:0.8rem;
+                    color:var(--text);line-height:1.9;">
+            <div style="color:#e8a000;font-size:0.72rem;letter-spacing:2px;
+                        margin-bottom:0.75rem;">[ STATUT DU COMPTE ]</div>
+            <div>Compte : <span style="color:var(--accent2);">{{ current_user.username }}</span></div>
+            <div>Rôle actuel : <span style="color:#e8a000;font-weight:700;">PENDING</span></div>
+            <div style="margin-top:0.75rem;color:var(--text-dim);font-size:0.78rem;">
+                Votre compte a été créé avec succès mais n'a pas encore
+                de rôle assigné. Un administrateur doit vous attribuer
+                un rôle (user / tech / admin) avant que vous puissiez
+                accéder à la plateforme.
+            </div>
+        </div>
+    </div>
+
+    <div style="background:rgba(0,204,255,0.05);border:1px solid rgba(0,204,255,0.15);
+                padding:0.85rem 1.2rem;font-family:'Share Tech Mono',monospace;
+                font-size:0.75rem;color:var(--text-dim);text-align:left;margin-bottom:2rem;">
+        ℹ Contactez votre administrateur et communiquez-lui votre identifiant
+        <span style="color:var(--accent2);">{{ current_user.username }}</span>
+        pour qu'il vous attribue un accès depuis la page Administration.
+    </div>
+
+    <a href="{{ url_for('logout') }}"
+       style="font-family:'Share Tech Mono',monospace;font-size:0.78rem;
+              color:var(--text-dim);border:1px solid var(--border);
+              padding:0.5rem 1.2rem;text-decoration:none;letter-spacing:1px;
+              transition:all 0.2s;display:inline-block;"
+       onmouseover="this.style.borderColor='var(--accent3)';this.style.color='var(--accent3)'"
+       onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-dim)'">
+        Se déconnecter
+    </a>
+</div>
+{% endblock %}

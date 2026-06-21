@@ -57,33 +57,45 @@
             letter-spacing: 3px;
         }
         .nav-brand span { color: var(--accent2); }
-        .nav-links { display: flex; gap: 1.5rem; align-items: center; }
+        .nav-links { display: flex; gap: 1rem; align-items: center; flex-wrap: nowrap; }
         .nav-links a {
             color: var(--text-dim);
             text-decoration: none;
             font-family: 'Share Tech Mono', monospace;
-            font-size: 0.8rem;
-            letter-spacing: 2px;
+            font-size: 0.72rem;
+            letter-spacing: 1px;
             text-transform: uppercase;
             transition: color 0.2s, text-shadow 0.2s;
+            white-space: nowrap;
         }
         .nav-links a:hover { color: var(--accent); text-shadow: var(--glow); }
-        .nav-user {
-            font-family: 'Share Tech Mono', monospace;
-            font-size: 0.75rem;
-            color: var(--accent2);
-            display: flex; align-items: center; gap: 1rem;
+        .nav-user-block {
+            display: flex; align-items: center; gap: 0.75rem;
+            flex-shrink: 0; border-left: 1px solid var(--border);
+            padding-left: 0.85rem; margin-left: 0.25rem;
         }
-        .nav-user::before { content: '[ '; color: var(--text-dim); }
-        .nav-user::after  { content: ' ]'; color: var(--text-dim); }
+        .nav-user-info { text-align: right; }
+        .nav-username {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.78rem; color: var(--accent2); display: block;
+        }
+        .nav-role {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.62rem; letter-spacing: 1px;
+            display: block; margin-top: 1px;
+        }
+        .nav-role-admin   { color: var(--accent3); }
+        .nav-role-tech    { color: var(--accent2); }
+        .nav-role-user    { color: var(--accent); }
+        .nav-role-pending { color: #9a6700; }
         .btn-logout {
-            background: none; border: 1px solid var(--accent3);
-            color: var(--accent3); padding: 4px 12px;
+            background: none; border: 1px solid var(--border);
+            color: var(--text-dim); padding: 4px 12px;
             font-family: 'Share Tech Mono', monospace;
             font-size: 0.7rem; cursor: pointer; letter-spacing: 1px;
-            transition: all 0.2s; text-decoration: none;
+            transition: all 0.2s; text-decoration: none; flex-shrink: 0;
         }
-        .btn-logout:hover { background: var(--accent3); color: var(--bg); }
+        .btn-logout:hover { border-color: var(--accent3); color: var(--accent3); }
         main { max-width: 1400px; margin: 0 auto; padding: 2rem; }
         .flash-messages { margin-bottom: 1rem; }
         .flash {
@@ -227,12 +239,13 @@
         <a href="{{ link.url }}">{{ link.label }}</a>
         {% endfor %}
     </div>
-    <div style="display:flex;align-items:center;gap:1rem;">
-        <span class="nav-user">{{ current_user.username }}</span>
-        {% if current_role %}
-        <span class="tag {% if current_role == 'admin' %}tag-red{% elif current_role == 'tech' %}tag-blue{% else %}tag-green{% endif %}"
-              style="font-size:0.62rem;letter-spacing:1px;">{{ current_role|upper }}</span>
-        {% endif %}
+    <div class="nav-user-block">
+        <div class="nav-user-info">
+            <span class="nav-username">{{ current_user.username }}</span>
+            {% if current_role %}
+            <span class="nav-role nav-role-{{ current_role }}">{{ current_role|upper }}</span>
+            {% endif %}
+        </div>
         <a href="{{ url_for('logout') }}" class="btn-logout">EXIT</a>
     </div>
 </nav>

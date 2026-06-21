@@ -120,32 +120,36 @@ def save_history(tool, inp, out):
                    (current_user.id, tool, str(inp)[:500], str(out)[:2000]))
         db.commit(); db.close()
 
+# (endpoint, label, rôles autorisés)
 NAV_LINKS = [
-    ('dashboard',      'Dashboard'),
-    ('tools',          'Fast Tools'),
-    ('scans_page',     'Scans'),
-    ('workflows_page', 'Workflows'),
-    ('scan_tools_page','Outils'),
-    ('history_page',   'Historique'),
-    ('report_page',    'Rapport PDF'),
-    ('owasp',          'OWASP TOP 10'),
+    ('dashboard',      'Dashboard',    ['user', 'tech', 'admin']),
+    ('tools',          'Fast Tools',   ['user', 'tech', 'admin']),
+    ('scans_page',     'Scans',        ['tech', 'admin']),
+    ('workflows_page', 'Workflows',    ['tech', 'admin']),
+    ('scan_tools_page','Outils',       ['tech', 'admin']),
+    ('history_page',   'Historique',   ['user', 'tech', 'admin']),
+    ('report_page',    'Rapport PDF',  ['user', 'tech', 'admin']),
+    ('owasp',          'OWASP TOP 10', ['user', 'tech', 'admin']),
 ]
 
 @app.context_processor
 def inject_nav():
     from flask import url_for as _url_for
+    user_role = getattr(current_user, 'role', None) if current_user.is_authenticated else None
     nav = []
-    for endpoint, label in NAV_LINKS:
+    for endpoint, label, roles in NAV_LINKS:
+        if user_role not in roles:
+            continue
         try:
             nav.append({'url': _url_for(endpoint), 'label': label, 'endpoint': endpoint})
         except Exception:
             pass
-    if current_user.is_authenticated and current_user.role == 'admin':
+    if user_role == 'admin':
         try:
-            nav.append({'url': _url_for('admin_page'), 'label': 'Administration', 'endpoint': 'admin_page'})
+            nav.append({'url': _url_for('admin_page'), 'label': 'Admin', 'endpoint': 'admin_page'})
         except Exception:
             pass
-    return {'nav_links': nav, 'current_role': getattr(current_user, 'role', None)}
+    return {'nav_links': nav, 'current_role': user_role}
 
 @app.before_request
 def check_setup_required():
@@ -157,6 +161,20 @@ def check_setup_required():
     db.close()
     if count == 0:
         return redirect(url_for('setup'))
+
+
+@app.before_request
+def check_pending_role():
+    """Comptes 'pending' : accès restreint à /waiting et /logout uniquement."""
+    if not current_user.is_authenticated:
+        return
+    if current_user.role != 'pending':
+        return
+    if request.endpoint in ('waiting', 'logout', 'static', None):
+        return
+    if request.endpoint and request.endpoint.startswith('api_'):
+        return jsonify({'error': "Accès refusé : votre compte est en attente d'attribution de rôle."}), 403
+    return redirect(url_for('waiting'))
 
 
 @app.route('/')
@@ -176,6 +194,8 @@ def login():
                 flash("Ce compte a été désactivé. Contactez un administrateur.")
                 return render_template('login.html')
             login_user(User(u['id'], u['username'], u['role'], u['active']))
+            if u['role'] == 'pending':
+                return redirect(url_for('waiting'))
             return redirect(url_for('dashboard'))
         flash('Identifiants incorrects.')
     return render_template('login.html')
@@ -206,12 +226,10 @@ def register():
         else:
             try:
                 db = get_db()
-                existing_count = db.execute("SELECT COUNT(*) FROM users").fetchone()[0]
-                role = 'admin' if existing_count == 0 else 'user'
                 db.execute('INSERT INTO users (username, password, role) VALUES (?,?,?)',
-                           (username, generate_password_hash(password), role))
+                           (username, generate_password_hash(password), 'pending'))
                 db.commit(); db.close()
-                flash('Compte créé. Connectez-vous.')
+                flash('Compte créé. Connectez-vous — un administrateur doit vous attribuer un rôle avant que vous puissiez accéder à la plateforme.')
                 return redirect(url_for('login'))
             except: flash("Ce nom d'utilisateur existe déjà.")
     return render_template('register.html')
@@ -250,6 +268,14 @@ def setup():
             flash(f'Compte administrateur "{username}" créé. Connectez-vous.')
             return redirect(url_for('login'))
     return render_template('setup.html')
+
+
+@app.route('/waiting')
+@login_required
+def waiting():
+    if current_user.role != 'pending':
+        return redirect(url_for('dashboard'))
+    return render_template('waiting.html')
 
 
 @app.route('/logout')
@@ -1209,8 +1235,8 @@ def admin_page():
 @admin_required
 def api_admin_set_role(user_id):
     role = (request.json or {}).get('role', '').strip()
-    if role not in ('admin', 'tech', 'user'):
-        return jsonify({'error': 'Rôle invalide (admin, tech, user)'}), 400
+    if role not in ('admin', 'tech', 'user', 'pending'):
+        return jsonify({'error': 'Rôle invalide (admin, tech, user, pending)'}), 400
     if user_id == current_user.id and role != 'admin':
         return jsonify({'error': 'Vous ne pouvez pas retirer votre propre rôle admin'}), 400
     db = get_db()
@@ -1280,11 +1306,12 @@ def api_admin_settings():
 def api_admin_stats():
     db = get_db()
     stats = {
-        'total':  db.execute("SELECT COUNT(*) FROM users").fetchone()[0],
-        'admin':  db.execute("SELECT COUNT(*) FROM users WHERE role='admin'").fetchone()[0],
-        'tech':   db.execute("SELECT COUNT(*) FROM users WHERE role='tech'").fetchone()[0],
-        'user':   db.execute("SELECT COUNT(*) FROM users WHERE role='user'").fetchone()[0],
-        'active': db.execute("SELECT COUNT(*) FROM users WHERE active=1").fetchone()[0],
+        'total':   db.execute("SELECT COUNT(*) FROM users").fetchone()[0],
+        'admin':   db.execute("SELECT COUNT(*) FROM users WHERE role='admin'").fetchone()[0],
+        'tech':    db.execute("SELECT COUNT(*) FROM users WHERE role='tech'").fetchone()[0],
+        'user':    db.execute("SELECT COUNT(*) FROM users WHERE role='user'").fetchone()[0],
+        'pending': db.execute("SELECT COUNT(*) FROM users WHERE role='pending'").fetchone()[0],
+        'active':  db.execute("SELECT COUNT(*) FROM users WHERE active=1").fetchone()[0],
     }
     db.close()
     return jsonify(stats)
