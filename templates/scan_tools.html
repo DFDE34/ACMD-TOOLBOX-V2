@@ -110,12 +110,22 @@
                 </div>
                 <!-- Exemple 2 : cible URL -->
                 <div style="font-size:0.7rem;color:var(--accent3);margin-bottom:0.3rem;">⚠ Cible avec URL — seul le hostname est transmis, le reste est ignoré</div>
-                <div style="display:grid;grid-template-columns:auto 1fr;gap:0.2rem 1rem;font-size:0.72rem;">
+                <div style="display:grid;grid-template-columns:auto 1fr;gap:0.2rem 1rem;font-size:0.72rem;margin-bottom:0.75rem;">
                     <span style="color:var(--text-dim);">Commande :</span> <span style="color:var(--accent);">nikto -h</span>
                     <span style="color:var(--text-dim);">Options   :</span> <span style="color:var(--accent);">-Tuning 1</span>
                     <span style="color:var(--text-dim);">Cible     :</span> <span style="color:var(--accent2);">https://192.168.1.1:5000/api</span>
                     <span style="color:var(--text-dim);">Exécuté   :</span> <span style="color:var(--accent);">nikto -h 192.168.1.1 -Tuning 1</span>
-                    <span></span>                   <span style="color:var(--text-dim);font-size:0.68rem;">https://, :5000 et /api sont ignorés → utilisez {base_url} pour conserver le port</span>
+                    <span></span>                   <span style="color:var(--text-dim);font-size:0.68rem;">https://, :5000 et /api sont ignorés</span>
+                </div>
+                <!-- Alerte outils web -->
+                <div style="background:rgba(255,51,102,0.07);border:1px solid rgba(255,51,102,0.35);padding:0.6rem 0.75rem;font-size:0.72rem;line-height:1.7;">
+                    <span style="color:var(--accent3);font-weight:700;">⚠ Outils web (gobuster, feroxbuster, ffuf…)</span>
+                    <span style="color:var(--text-dim);"> — ces outils nécessitent l'URL complète avec schéma et port.
+                    Sans placeholder, le port et le <code style="color:var(--accent2);">https://</code> sont perdus et la commande échoue.</span>
+                    <div style="margin-top:0.4rem;display:grid;grid-template-columns:auto 1fr;gap:0.15rem 1rem;">
+                        <span style="color:var(--accent3);">✕ Sans placeholder :</span> <span style="color:var(--text-dim);">gobuster dir → reçoit <code>192.168.1.1</code> → échec</span>
+                        <span style="color:var(--accent);">✓ Avec placeholder :</span>  <span style="color:var(--text-dim);">gobuster dir -u {base_url} → reçoit <code>https://192.168.1.1:5000</code> → OK</span>
+                    </div>
                 </div>
             </div>
             <div style="color:var(--accent3);font-size:0.75rem;">⚠ Timeout : 5 minutes.</div>
