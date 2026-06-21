@@ -56,34 +56,44 @@
     <div style="background:rgba(0,255,136,0.03);border:1px solid rgba(0,255,136,0.2);padding:1rem 1.25rem;">
         <div style="font-family:'Orbitron',monospace;font-size:0.72rem;color:var(--accent);letter-spacing:2px;margin-bottom:0.75rem;">⚙ OUTILS CUSTOM — Exécution shell réelle sur votre machine</div>
         <div style="font-family:'Share Tech Mono',monospace;font-size:0.78rem;color:var(--text-dim);line-height:1.8;">
-            <div style="margin-bottom:0.5rem;">Le champ <span style="color:var(--accent);">Commande</span> est exécuté directement en shell. Deux modes :</div>
-
-            <div style="background:var(--bg3);border:1px solid var(--border);padding:0.75rem;margin-bottom:0.5rem;">
-                <div style="color:var(--accent2);font-size:0.7rem;margin-bottom:0.3rem;">MODE 1 — Commande avec <span style="color:var(--accent);">{target}</span> (substitution explicite)</div>
-                <div style="color:var(--text-dim);font-size:0.72rem;margin-bottom:0.4rem;">Utilisez <code style="color:var(--accent);">{target}</code> là où la cible doit apparaître.</div>
-                <div><span style="color:var(--text-dim);">Commande :</span> <span style="color:var(--accent);">nmap -sV -O {target}</span></div>
-                <div><span style="color:var(--text-dim);">Options   :</span> <span style="color:var(--accent);">-p 80,443</span></div>
-                <div><span style="color:var(--text-dim);">Exécuté   :</span> <span style="color:var(--accent2);">nmap -sV -O 192.168.1.1 -p 80,443</span></div>
+            <div style="margin-bottom:0.75rem;">
+                Le champ <span style="color:var(--accent);">Commande</span> est exécuté directement en shell.
+                Utilisez des <b style="color:var(--accent2);">placeholders</b> pour contrôler quelle partie de la cible est injectée.
+                Si la cible contient une URL (<code style="color:var(--accent2);">https://…</code>), chaque outil reçoit automatiquement le bon fragment.
             </div>
 
-            <div style="background:var(--bg3);border:1px solid var(--border);padding:0.75rem;margin-bottom:0.75rem;">
-                <div style="color:var(--accent2);font-size:0.7rem;margin-bottom:0.3rem;">MODE 2 — Exécutable seul (cible ajoutée automatiquement)</div>
-                <div style="color:var(--text-dim);font-size:0.72rem;margin-bottom:0.4rem;">La cible est insérée juste après le nom de la commande.</div>
-                <div><span style="color:var(--text-dim);">Commande :</span> <span style="color:var(--accent);">nikto -h</span></div>
-                <div><span style="color:var(--text-dim);">Options   :</span> <span style="color:var(--accent);">-Tuning 1</span></div>
-                <div><span style="color:var(--text-dim);">Exécuté   :</span> <span style="color:var(--accent2);">nikto -h 192.168.1.1 -Tuning 1</span></div>
+            <!-- Tableau des placeholders -->
+            <div style="background:var(--bg3);border:1px solid var(--border);padding:0.75rem;margin-bottom:0.6rem;">
+                <div style="color:var(--accent2);font-size:0.7rem;letter-spacing:1px;margin-bottom:0.5rem;">PLACEHOLDERS DISPONIBLES — cible : <span style="color:var(--accent);">https://192.168.1.1:5000/api</span></div>
+                <div style="display:grid;grid-template-columns:auto 1fr;gap:0.15rem 1rem;font-size:0.72rem;">
+                    <span style="color:var(--accent);">{target}</span>    <span style="color:var(--text-dim);">cible telle que saisie → <span style="color:var(--text);">https://192.168.1.1:5000/api</span></span>
+                    <span style="color:var(--accent);">{host}</span>      <span style="color:var(--text-dim);">hostname / IP seul      → <span style="color:var(--text);">192.168.1.1</span></span>
+                    <span style="color:var(--accent);">{port}</span>      <span style="color:var(--text-dim);">port seul               → <span style="color:var(--text);">5000</span></span>
+                    <span style="color:var(--accent);">{base_url}</span>  <span style="color:var(--text-dim);">URL sans le path        → <span style="color:var(--text);">https://192.168.1.1:5000</span></span>
+                    <span style="color:var(--accent);">{host_port}</span> <span style="color:var(--text-dim);">host:port               → <span style="color:var(--text);">192.168.1.1:5000</span></span>
+                </div>
             </div>
 
-            <div style="color:var(--accent3);font-size:0.75rem;">⚠ Si l'outil n'est pas installé sur votre machine, le scan affichera les instructions d'installation. Timeout automatique à 60 secondes.</div>
-
-            <div style="margin-top:0.6rem;color:var(--text-dim);font-size:0.75rem;">
-                Exemples d'outils courants :
-                <span style="color:var(--accent);">nmap</span> ·
-                <span style="color:var(--accent);">nikto -h {target}</span> ·
-                <span style="color:var(--accent);">gobuster dir -u http://{target}</span> ·
-                <span style="color:var(--accent);">sqlmap -u http://{target}</span> ·
-                <span style="color:var(--accent);">curl -I http://{target}</span>
+            <!-- Exemples -->
+            <div style="background:var(--bg3);border:1px solid var(--border);padding:0.75rem;margin-bottom:0.75rem;font-size:0.72rem;">
+                <div style="color:var(--accent2);font-size:0.7rem;letter-spacing:1px;margin-bottom:0.5rem;">EXEMPLES</div>
+                <div style="display:grid;grid-template-columns:auto 1fr;gap:0.4rem 1rem;">
+                    <span style="color:var(--text-dim);">nmap</span>
+                    <span style="color:var(--text-dim);">→ passe le host auto si URL, sinon la cible brute</span>
+                    <span style="color:var(--accent);">nmap -sV {host}</span>
+                    <span style="color:var(--text-dim);">→ toujours l'IP/hostname (recommandé pour les scanners réseau)</span>
+                    <span style="color:var(--accent);">nikto -h {base_url}</span>
+                    <span style="color:var(--text-dim);">→ URL complète avec port pour les scanners web</span>
+                    <span style="color:var(--accent);">gobuster dir -u {base_url}</span>
+                    <span style="color:var(--text-dim);">→ URL de base pour la découverte de répertoires</span>
+                    <span style="color:var(--accent);">sqlmap -u {target}</span>
+                    <span style="color:var(--text-dim);">→ URL complète avec path pour SQLMap</span>
+                    <span style="color:var(--accent);">curl -I {base_url}</span>
+                    <span style="color:var(--text-dim);">→ requête HTTP sur la base URL</span>
+                </div>
             </div>
+
+            <div style="color:var(--accent3);font-size:0.75rem;">⚠ Sans placeholder, si la cible est une URL le hostname est extrait automatiquement pour les outils réseau. Timeout : 5 minutes.</div>
         </div>
     </div>
 </div>

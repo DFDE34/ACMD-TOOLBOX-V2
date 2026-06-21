@@ -582,6 +582,73 @@ def api_scan_launch():
     t.daemon = True; t.start()
     return jsonify({'ok': True, 'scan_id': scan_id, 'message': f'Scan lance sur {target}'})
 
+def parse_target(raw):
+    """
+    Décompose une cible en composants pour adapter la commande à l'outil.
+    Gère : URL complète (https://host:port/path), host:port, hostname/IP, CIDR.
+
+    Clés retournées :
+      original  — cible telle que saisie
+      scheme    — 'https', 'http', '' …
+      host      — hostname/IP seul (sans port ni protocole)
+      port      — int ou None
+      path      — chemin URL ou ''
+      url       — cible originale complète
+      base_url  — scheme://host:port (sans le path)
+      host_port — "host:port" ou "host" si pas de port
+    """
+    original = (raw or '').strip()
+
+    # URL avec protocole explicite (http://, https://, ftp:// …)
+    if '://' in original:
+        try:
+            p    = urllib.parse.urlparse(original)
+            h    = p.hostname or ''
+            port = p.port
+            base = f"{p.scheme}://{p.netloc}"
+            hp   = f"{h}:{port}" if port else h
+            return {
+                'original':  original,
+                'scheme':    p.scheme,
+                'host':      h,
+                'port':      port,
+                'path':      p.path,
+                'url':       original,
+                'base_url':  base,
+                'host_port': hp,
+            }
+        except Exception:
+            pass
+
+    # host:port sans protocole (ex: 192.168.1.1:8080) — sans barre oblique
+    if ':' in original and '/' not in original:
+        parts = original.rsplit(':', 1)
+        if parts[1].isdigit():
+            h, port = parts[0], int(parts[1])
+            return {
+                'original':  original,
+                'scheme':    '',
+                'host':      h,
+                'port':      port,
+                'path':      '',
+                'url':       original,
+                'base_url':  original,
+                'host_port': original,
+            }
+
+    # Hostname/IP simple ou CIDR — passé tel quel
+    return {
+        'original':  original,
+        'scheme':    '',
+        'host':      original,
+        'port':      None,
+        'path':      '',
+        'url':       original,
+        'base_url':  original,
+        'host_port': original,
+    }
+
+
 def execute_tool(tool, target, options):
     """
     Exécute un outil de scan.
@@ -598,18 +665,16 @@ def execute_tool(tool, target, options):
     # ── Outils intégrés Python pur ────────────────────────────────────────────
     try:
         if cmd == 'portscan':
-            # Extraire host:port si présent dans la cible
-            if ':' in target:
-                scan_host, extra_port = target.rsplit(':', 1)
-            else:
-                scan_host, extra_port = target, None
+            parsed    = parse_target(target)
+            scan_host = parsed['host']
+            extra_port = str(parsed['port']) if parsed['port'] else None
             # Ports depuis les options (format: "80,443,22" ou "-p 80,443,22")
             ports_str = re.sub(r'-p\s*', '', effective_options).strip()
             if not ports_str and extra_port and extra_port.isdigit():
                 ports_str = extra_port
             ports_str = ports_str or '21,22,23,25,53,80,110,143,443,445,3306,3389,5432,6379,8080,8443,27017'
             if not re.match(r'^[a-zA-Z0-9.\-]+$', scan_host):
-                return '', 'Cible invalide (caractères non autorisés)'
+                return '', f'Cible invalide : impossible d\'extraire un hostname depuis "{target}"'
             target = scan_host
             try:
                 ip = socket.gethostbyname(target)
@@ -667,7 +732,7 @@ def execute_tool(tool, target, options):
             return '\n'.join(lines), ''
 
         elif cmd == 'dns':
-            dns_host = target.split(':')[0]
+            dns_host = parse_target(target)['host']
             if not re.match(r'^[a-zA-Z0-9.\-]+$', dns_host):
                 return '', 'Hôte invalide'
             try:
@@ -693,7 +758,7 @@ def execute_tool(tool, target, options):
             return '\n'.join(lines), ''
 
         elif cmd == 'ipinfo':
-            ip_str = target.split(':')[0]
+            ip_str = parse_target(target)['host']
             try:
                 addr = ipaddress.ip_address(ip_str)
             except ValueError:
@@ -776,29 +841,42 @@ def _run_shell_tool(tool, target, options):
     """
     Exécute la commande shell de l'outil custom.
 
-    Logique de construction de la commande :
-      1. Si la commande contient '{target}', on remplace directement.
-         Ex : "nmap -sV {target}" → "nmap -sV 192.168.1.1"
-         Puis on ajoute les options à la fin si elles sont définies.
+    Placeholders disponibles dans le champ Commande :
+      {target}    — cible telle que saisie (ex: https://192.168.1.1:5000/api)
+      {host}      — hostname/IP seul        (ex: 192.168.1.1)
+      {port}      — port seul               (ex: 5000)
+      {url}       — URL complète            (ex: https://192.168.1.1:5000/api)
+      {base_url}  — URL sans le path        (ex: https://192.168.1.1:5000)
+      {host_port} — host:port               (ex: 192.168.1.1:5000)
 
-      2. Sinon, on traite la commande comme un exécutable seul :
-         Ex : commande="nmap", options="-sV -p 80,443"
-         → "nmap 192.168.1.1 -sV -p 80,443"
-
-    Timeout : 60 secondes.
+    Sans placeholder : la cible est insérée après la commande.
+    Si la cible est une URL (http/https), seul le hostname est passé
+    pour éviter les erreurs sur les outils réseau (nmap, masscan…).
     """
     import subprocess, shutil
 
+    parsed  = parse_target(target)
     raw_cmd = tool['command'].strip()
 
-    if '{target}' in raw_cmd:
-        # Substitution explicite dans la commande
-        full_cmd = raw_cmd.replace('{target}', target)
+    _PH = ('{target}', '{host}', '{port}', '{url}', '{base_url}', '{host_port}')
+    if any(ph in raw_cmd for ph in _PH):
+        # Substitution explicite : chaque placeholder est remplacé
+        full_cmd = (raw_cmd
+            .replace('{target}',    parsed['original'])
+            .replace('{host}',      parsed['host'])
+            .replace('{port}',      str(parsed['port'] or ''))
+            .replace('{url}',       parsed['url'])
+            .replace('{base_url}',  parsed['base_url'])
+            .replace('{host_port}', parsed['host_port'])
+        )
         if options:
             full_cmd = full_cmd + ' ' + options
     else:
-        # L'outil est juste un nom d'exécutable
-        full_cmd = f'{raw_cmd} {target}'
+        # Pas de placeholder : mode automatique
+        # Si la cible est une URL (scheme présent), on extrait le host
+        # pour les outils réseau qui n'acceptent pas de protocole.
+        effective_target = parsed['host'] if parsed['scheme'] else parsed['original']
+        full_cmd = f'{raw_cmd} {effective_target}'
         if options:
             full_cmd += f' {options}'
 
