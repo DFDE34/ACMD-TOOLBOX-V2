@@ -16,6 +16,7 @@ login_manager.login_view = 'login'
 login_manager.login_message = 'Veuillez vous connecter.'
 
 DB = os.environ.get('DB_PATH', 'toolbox.db')  # Docker: /app/data/toolbox.db
+_workflow_stops = {}   # {run_id: threading.Event} — arrêt volontaire des workflows
 
 def get_db():
     conn = sqlite3.connect(DB)
@@ -1001,9 +1002,15 @@ def api_workflow_run(wf_id):
     db.execute('UPDATE workflows SET status=? WHERE id=?', ('running', wf_id))
     db.commit(); run_id = cur.lastrowid
     uid = current_user.id; wf_name = wf['name']; db.close()
-    def run_wf(wf_id, run_id, steps, target, user_id, wf_name):
+
+    stop_event = threading.Event()
+    _workflow_stops[run_id] = stop_event
+
+    def run_wf(wf_id, run_id, steps, target, user_id, wf_name, stop_evt):
         results = []
         for i, step in enumerate(steps):
+            if stop_evt.is_set():
+                break
             db2 = get_db()
             db2.execute('UPDATE workflow_runs SET current_step=? WHERE id=?', (i+1, run_id)); db2.commit()
             tool = db2.execute('SELECT * FROM scan_tools WHERE id=?', (step['tool_id'],)).fetchone(); db2.close()
@@ -1013,32 +1020,68 @@ def api_workflow_run(wf_id):
             results.append({'step':i+1,'label':step.get('label'),'tool':tool['name'],'status':'failed' if err else 'completed','output':out,'error':err})
             db3 = get_db(); db3.execute('UPDATE workflow_runs SET results=? WHERE id=?', (json.dumps(results), run_id)); db3.commit(); db3.close()
             if err: break
-        overall = 'completed' if all(r['status']=='completed' for r in results) else 'failed'
+        stopped = stop_evt.is_set()
+        overall = 'stopped' if stopped else ('completed' if results and all(r['status']=='completed' for r in results) else 'failed')
         db4 = get_db()
         db4.execute('UPDATE workflow_runs SET status=?, results=?, finished_at=?, current_step=? WHERE id=?',
-            (overall, json.dumps(results), datetime.now().isoformat(), len(steps), run_id))
+            (overall, json.dumps(results), datetime.now().isoformat(), len(results), run_id))
         db4.execute('UPDATE workflows SET status=? WHERE id=?', ('idle', wf_id))
-        result_lines = []
-        for r in results:
-            icon = '✓' if r['status'] == 'completed' else '✗'
-            excerpt = (r.get('output') or r.get('error') or '').strip()[:600]
-            result_lines.append(f"{icon} Étape {r['step']} [{r.get('tool', r.get('label', ''))}]\n{excerpt}")
-        history_output = f"Statut global : {overall} | {len(results)} étape(s)\n\n" + "\n\n".join(result_lines)
-        db4.execute('INSERT INTO history (user_id, tool, input, output) VALUES (?,?,?,?)',
-            (user_id, f'Workflow: {wf_name}', target, history_output[:8000]))
+        if not stopped:
+            result_lines = []
+            for r in results:
+                icon = '✓' if r['status'] == 'completed' else '✗'
+                excerpt = (r.get('output') or r.get('error') or '').strip()[:600]
+                result_lines.append(f"{icon} Étape {r['step']} [{r.get('tool', r.get('label', ''))}]\n{excerpt}")
+            history_output = f"Statut global : {overall} | {len(results)} étape(s)\n\n" + "\n\n".join(result_lines)
+            db4.execute('INSERT INTO history (user_id, tool, input, output) VALUES (?,?,?,?)',
+                (user_id, f'Workflow: {wf_name}', target, history_output[:8000]))
         db4.commit(); db4.close()
-    t = threading.Thread(target=run_wf, args=(wf_id, run_id, steps, target, uid, wf_name))
+        _workflow_stops.pop(run_id, None)
+
+    t = threading.Thread(target=run_wf, args=(wf_id, run_id, steps, target, uid, wf_name, stop_event))
     t.daemon = True; t.start()
-    return jsonify({'ok': True, 'run_id': run_id, 'message': f'Workflow lance sur {target}'})
+    return jsonify({'ok': True, 'run_id': run_id, 'message': f'Workflow lancé sur {target}'})
 
 @app.route('/api/workflows/runs/<int:run_id>')
 @login_required
 def api_run_status(run_id):
     db = get_db()
-    run = db.execute('SELECT * FROM workflow_runs WHERE id=? AND user_id=?', (run_id, current_user.id)).fetchone()
+    run = db.execute(
+        '''SELECT workflow_runs.*, COALESCE(workflows.name, '?') AS wf_name
+           FROM workflow_runs
+           LEFT JOIN workflows ON workflows.id = workflow_runs.workflow_id
+           WHERE workflow_runs.id=? AND workflow_runs.user_id=?''',
+        (run_id, current_user.id)).fetchone()
     db.close()
     if not run: return jsonify({'error': 'Run introuvable'}), 404
     d = dict(run); d['results'] = json.loads(d['results'] or '[]'); return jsonify(d)
+
+@app.route('/api/workflows/runs/<int:run_id>/stop', methods=['POST'])
+@login_required
+def api_stop_workflow_run(run_id):
+    db = get_db()
+    run = db.execute('SELECT status FROM workflow_runs WHERE id=? AND user_id=?', (run_id, current_user.id)).fetchone()
+    db.close()
+    if not run: return jsonify({'error': 'Run introuvable'}), 404
+    if run['status'] != 'running': return jsonify({'error': "Ce run n'est pas en cours d'exécution"}), 409
+    ev = _workflow_stops.get(run_id)
+    if ev:
+        ev.set()
+    return jsonify({'ok': True, 'message': 'Arrêt demandé'})
+
+@app.route('/api/workflows/runs')
+@login_required
+def api_all_workflow_runs():
+    db = get_db()
+    runs = db.execute(
+        '''SELECT workflow_runs.*, COALESCE(workflows.name, 'Workflow supprimé') AS wf_name
+           FROM workflow_runs
+           LEFT JOIN workflows ON workflows.id = workflow_runs.workflow_id
+           WHERE workflow_runs.user_id=?
+           ORDER BY workflow_runs.id DESC LIMIT 30''',
+        (current_user.id,)).fetchall()
+    db.close()
+    return jsonify([dict(r) for r in runs])
 
 @app.route('/api/workflows/<int:wf_id>/runs')
 @login_required

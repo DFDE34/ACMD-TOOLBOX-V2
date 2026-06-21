@@ -2,6 +2,7 @@
 {% block title %}Workflows — ACMD Toolbox{% endblock %}
 {% block head %}
 <style>
+/* ── Workflow cards ── */
 .wf-card { background:var(--bg2); border:1px solid var(--border); padding:1.25rem; transition:border-color 0.2s; }
 .wf-card:hover { border-color:rgba(0,255,136,0.3); }
 .wf-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(320px,1fr)); gap:1rem; }
@@ -9,9 +10,11 @@
 .wf-desc { font-family:'Rajdhani',sans-serif; font-size:0.85rem; color:var(--text-dim); margin-bottom:0.75rem; }
 .step-tag { display:inline-block; font-family:'Share Tech Mono',monospace; font-size:0.65rem; padding:2px 8px; border:1px solid var(--border); color:var(--text-dim); margin:2px; }
 .badge { display:inline-flex; align-items:center; gap:4px; font-family:'Share Tech Mono',monospace; font-size:0.65rem; padding:2px 8px; border:1px solid; }
-.badge-idle { border-color:var(--border); color:var(--text-dim); }
+.badge-idle    { border-color:var(--border); color:var(--text-dim); }
 .badge-running { border-color:var(--accent2); color:var(--accent2); animation:pulse 1.5s ease-in-out infinite; }
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
+
+/* ── Create/Edit modal ── */
 .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.85); display:flex; align-items:center; justify-content:center; z-index:1000; display:none; }
 .modal { background:var(--bg2); border:1px solid var(--border); padding:2rem; width:95%; max-width:680px; max-height:92vh; overflow-y:auto; position:relative; }
 .modal::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; background:linear-gradient(90deg,transparent,var(--accent),transparent); }
@@ -24,23 +27,70 @@
 .step-row { display:grid; grid-template-columns:1fr 1fr auto; gap:0.5rem; align-items:end; }
 .step-del { background:none; border:1px solid var(--accent3); color:var(--accent3); padding:4px 10px; font-family:'Share Tech Mono',monospace; font-size:0.75rem; cursor:pointer; height:36px; transition:all 0.2s; }
 .step-del:hover { background:var(--accent3); color:white; }
-.progress-bar-wrap { background:var(--bg3); border:1px solid var(--border); height:8px; overflow:hidden; margin:0.75rem 0; }
-.progress-bar { height:100%; background:var(--accent); transition:width 0.5s; width:0%; }
-.run-step { padding:0.6rem 0; border-bottom:1px solid rgba(26,58,74,0.4); font-family:'Share Tech Mono',monospace; font-size:0.8rem; }
+
+/* ── Floating active-runs panel ── */
+.active-panel {
+    position:fixed; bottom:1.2rem; right:1.2rem; width:360px; z-index:1500;
+    font-family:'Share Tech Mono',monospace; font-size:0.78rem;
+    box-shadow:0 4px 32px rgba(0,0,0,0.6);
+}
+.active-panel-header {
+    background:var(--bg2); border:1px solid var(--accent2);
+    padding:0.6rem 1rem; display:flex; justify-content:space-between; align-items:center;
+    cursor:pointer; user-select:none;
+}
+.active-panel-title { color:var(--accent2); letter-spacing:1px; font-size:0.72rem; display:flex; align-items:center; gap:6px; }
+.active-panel-toggle { background:none; border:1px solid rgba(0,204,255,0.3); color:var(--accent2); padding:1px 8px; cursor:pointer; font-size:0.75rem; line-height:1.4; }
+.active-panel-body { background:var(--bg2); border:1px solid var(--accent2); border-top:none; max-height:340px; overflow-y:auto; }
+.run-item { padding:0.75rem 1rem; border-bottom:1px solid rgba(0,204,255,0.1); }
+.run-item:last-child { border-bottom:none; }
+.run-item-name { color:var(--accent); font-weight:700; font-size:0.75rem; }
+.run-item-target { color:var(--text-dim); font-size:0.68rem; margin:0.2rem 0 0.4rem; }
+.mini-progress-wrap { background:var(--bg3); height:4px; overflow:hidden; border:1px solid var(--border); margin-bottom:0.4rem; }
+.mini-progress { height:100%; background:var(--accent2); transition:width 0.4s; }
+.run-item-footer { display:flex; justify-content:space-between; align-items:center; }
+.run-item-status { font-size:0.65rem; }
+.btn-stop { background:none; border:1px solid var(--accent3); color:var(--accent3); padding:2px 10px; font-family:'Share Tech Mono',monospace; font-size:0.65rem; cursor:pointer; transition:all 0.2s; }
+.btn-stop:hover { background:var(--accent3); color:white; }
+.spinner-inline { display:inline-block; width:8px; height:8px; border:1.5px solid rgba(0,204,255,0.3); border-top-color:var(--accent2); border-radius:50%; animation:spin 0.6s linear infinite; vertical-align:middle; }
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── Runs history section ── */
+.history-section { margin-top:2.5rem; }
+.history-section-header {
+    display:flex; justify-content:space-between; align-items:center;
+    border-bottom:1px solid var(--border); padding-bottom:0.6rem; margin-bottom:1rem;
+}
+.run-row {
+    background:var(--bg2); border:1px solid var(--border);
+    padding:0.75rem 1rem; margin-bottom:0.5rem; cursor:pointer;
+    transition:border-color 0.2s;
+}
+.run-row:hover { border-color:rgba(0,255,136,0.2); }
+.run-row-main { display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap; }
+.run-row-name { font-family:'Orbitron',monospace; font-size:0.75rem; color:var(--accent); font-weight:700; flex:1; min-width:120px; }
+.run-row-target { font-family:'Share Tech Mono',monospace; font-size:0.72rem; color:var(--text-dim); flex:1; min-width:120px; }
+.run-row-meta { font-family:'Share Tech Mono',monospace; font-size:0.65rem; color:var(--text-dim); white-space:nowrap; }
+.status-badge { display:inline-flex; align-items:center; gap:3px; font-family:'Share Tech Mono',monospace; font-size:0.65rem; padding:2px 8px; border:1px solid; white-space:nowrap; }
+.status-running   { border-color:var(--accent2); color:var(--accent2); }
+.status-completed { border-color:var(--accent);  color:var(--accent);  }
+.status-failed    { border-color:var(--accent3); color:var(--accent3); }
+.status-stopped   { border-color:#e8a000; color:#e8a000; }
+.run-detail { display:none; margin-top:0.75rem; border-top:1px solid var(--border); padding-top:0.75rem; }
+.run-step-item { padding:0.5rem 0; border-bottom:1px solid rgba(26,58,74,0.4); font-family:'Share Tech Mono',monospace; font-size:0.75rem; }
+.run-step-item:last-child { border-bottom:none; }
 .run-step-label { color:var(--text); margin-bottom:0.2rem; }
-.run-step-out { color:var(--text-dim); font-size:0.75rem; white-space:pre-wrap; max-height:120px; overflow-y:auto; }
-.run-step-err { color:var(--accent3); font-size:0.75rem; }
-.toast { position:fixed; bottom:1.5rem; right:1.5rem; background:var(--bg2); border:1px solid; padding:0.75rem 1.25rem; font-family:'Share Tech Mono',monospace; font-size:0.8rem; z-index:2000; transform:translateX(120%); transition:transform 0.3s; max-width:350px; }
+.run-step-out { color:var(--text-dim); font-size:0.7rem; white-space:pre-wrap; max-height:100px; overflow-y:auto; background:var(--bg3); padding:0.4rem; margin-top:0.25rem; }
+.run-step-err { color:var(--accent3); font-size:0.7rem; margin-top:0.2rem; }
+
+/* ── Toast & confirm ── */
+.toast { position:fixed; bottom:5.5rem; right:1.5rem; background:var(--bg2); border:1px solid; padding:0.75rem 1.25rem; font-family:'Share Tech Mono',monospace; font-size:0.8rem; z-index:2000; transform:translateX(120%); transition:transform 0.3s; max-width:350px; }
 .toast.show { transform:translateX(0); }
 .toast.success { border-color:var(--accent); color:var(--accent); }
 .toast.error   { border-color:var(--accent3); color:var(--accent3); }
 .toast.info    { border-color:var(--accent2); color:var(--accent2); }
 .confirm-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.85); display:flex; align-items:center; justify-content:center; z-index:2000; display:none; }
 .confirm-box { background:var(--bg2); border:1px solid var(--accent3); padding:2rem; max-width:380px; width:90%; }
-.run-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.9); display:flex; align-items:center; justify-content:center; z-index:1500; display:none; }
-.run-modal { background:var(--bg2); border:1px solid var(--accent2); padding:2rem; width:95%; max-width:600px; max-height:90vh; overflow-y:auto; }
-.spinner-inline { display:inline-block; width:12px; height:12px; border:2px solid rgba(0,255,136,0.3); border-top-color:var(--accent); border-radius:50%; animation:spin 0.6s linear infinite; vertical-align:middle; margin-right:6px; }
-@keyframes spin{to{transform:rotate(360deg)}}
 </style>
 {% endblock %}
 {% block content %}
@@ -54,14 +104,27 @@
 </div>
 
 <div style="background:rgba(0,204,255,0.05);border:1px solid rgba(0,204,255,0.2);padding:0.75rem 1rem;margin-bottom:1.5rem;font-family:'Share Tech Mono',monospace;font-size:0.78rem;color:var(--accent2);">
-    ℹ Un workflow exécute automatiquement ses étapes sur une cible. En cas d'échec d'une étape, l'exécution s'arrête.
+    ℹ Les workflows s'exécutent en arrière-plan. Vous pouvez naviguer librement, lancer d'autres scans ou workflows pendant l'exécution.
 </div>
 
+<!-- Workflows grid -->
 <div class="wf-grid" id="wf-grid">
     <div style="text-align:center;padding:2rem;font-family:'Share Tech Mono',monospace;color:var(--text-dim);">Chargement...</div>
 </div>
 
-<!-- Create/Edit Modal -->
+<!-- Runs history section -->
+<div class="history-section" id="runs-section" style="display:none;">
+    <div class="history-section-header">
+        <div>
+            <span style="font-family:'Orbitron',monospace;font-size:0.85rem;color:var(--accent);letter-spacing:3px;">HISTORIQUE DES EXÉCUTIONS</span>
+            <span id="runs-count-badge" style="font-family:'Share Tech Mono',monospace;font-size:0.7rem;color:var(--text-dim);margin-left:0.75rem;"></span>
+        </div>
+        <button class="btn btn-blue" onclick="loadRuns()" style="font-size:0.7rem;padding:4px 12px;">↻ Actualiser</button>
+    </div>
+    <div id="runs-list"></div>
+</div>
+
+<!-- ── Create/Edit Modal ── -->
 <div class="modal-overlay" id="modal-overlay">
 <div class="modal">
     <div class="modal-title" id="modal-title">CRÉER UN WORKFLOW</div>
@@ -87,38 +150,24 @@
 </div>
 </div>
 
-<!-- Run Target Modal -->
+<!-- ── Run Target Modal ── -->
 <div class="modal-overlay" id="run-target-overlay">
 <div class="modal" style="max-width:420px;">
     <div class="modal-title">EXÉCUTER LE WORKFLOW</div>
     <div id="run-wf-name" style="font-family:'Share Tech Mono',monospace;font-size:0.8rem;color:var(--accent2);margin-bottom:1rem;"></div>
     <div class="form-group">
         <label>Cible <span style="color:var(--accent3)">*</span></label>
-        <input id="run-target" placeholder="ex: 192.168.1.1 ou example.com">
-        <div style="font-family:'Share Tech Mono',monospace;font-size:0.7rem;color:var(--text-dim);margin-top:0.25rem;">La variable {cible} sera remplacée par cette valeur dans toutes les étapes.</div>
+        <input id="run-target" placeholder="ex: 192.168.1.1 ou https://example.com">
+        <div style="font-family:'Share Tech Mono',monospace;font-size:0.7rem;color:var(--text-dim);margin-top:0.25rem;">Utilisez les placeholders {host}, {url}, etc. dans les étapes.</div>
     </div>
     <div style="display:flex;gap:0.75rem;margin-top:1rem;">
-        <button class="btn" id="run-confirm-btn" onclick="confirmRun()">Exécuter</button>
+        <button class="btn" onclick="confirmRun()">▶ Exécuter en arrière-plan</button>
         <button class="btn btn-red" onclick="closeRunTarget()">Annuler</button>
     </div>
 </div>
 </div>
 
-<!-- Run Progress Modal -->
-<div class="run-overlay" id="run-overlay">
-<div class="run-modal">
-    <div style="font-family:'Orbitron',monospace;font-size:0.9rem;color:var(--accent2);letter-spacing:3px;margin-bottom:0.5rem;">EXÉCUTION EN COURS</div>
-    <div id="run-info" style="font-family:'Share Tech Mono',monospace;font-size:0.78rem;color:var(--text-dim);margin-bottom:1rem;"></div>
-    <div class="progress-bar-wrap"><div class="progress-bar" id="run-progress"></div></div>
-    <div id="run-status" style="font-family:'Share Tech Mono',monospace;font-size:0.78rem;color:var(--accent2);margin-bottom:1rem;"></div>
-    <div id="run-steps"></div>
-    <div style="margin-top:1rem;display:flex;gap:0.75rem;" id="run-actions" style="display:none;">
-        <button class="btn" onclick="closeRunOverlay()">Fermer</button>
-    </div>
-</div>
-</div>
-
-<!-- Confirm -->
+<!-- ── Confirm overlay ── -->
 <div class="confirm-overlay" id="confirm-overlay">
 <div class="confirm-box">
     <div style="font-family:'Orbitron',monospace;font-size:0.9rem;color:var(--accent3);margin-bottom:1rem;">⚠ CONFIRMATION</div>
@@ -130,69 +179,88 @@
 </div>
 </div>
 
+<!-- ── Floating active-runs panel ── -->
+<div class="active-panel" id="active-panel" style="display:none;">
+    <div class="active-panel-header" onclick="togglePanel()">
+        <div class="active-panel-title">
+            <span class="spinner-inline"></span>
+            <span>EXÉCUTIONS ACTIVES (<span id="active-count">0</span>)</span>
+        </div>
+        <button class="active-panel-toggle" id="panel-toggle-btn" onclick="event.stopPropagation();togglePanel()">−</button>
+    </div>
+    <div class="active-panel-body" id="active-panel-body">
+        <div id="active-runs-list"></div>
+    </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
-let availableTools = [];
-let stepCount = 0;
-let pendingRunWfId = null;
-let activeRunId = null;
-let runPollInterval = null;
+let availableTools  = [];
+let stepCount       = 0;
+let pendingRunWfId  = null;
+let pendingRunWfName = '';
+let activeRuns      = new Map();   // run_id (int) -> run data
+let pollInterval    = null;
+let panelCollapsed  = false;
 
+// ── HTML escape ───────────────────────────────────────────────────
+function escHtml(s) {
+    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Toast ─────────────────────────────────────────────────────────
 function showToast(msg, type='success') {
     const t = document.getElementById('toast');
     t.textContent = msg; t.className = `toast ${type} show`;
-    setTimeout(() => t.className='toast', 4000);
+    setTimeout(() => t.className = 'toast', 4000);
 }
 
+// ── Tools ─────────────────────────────────────────────────────────
 async function loadTools() {
     const res = await fetch('/api/scan-tools');
     availableTools = await res.json();
 }
 
-function toolOptions() {
-    return availableTools.map(t => `<option value="${t.id}">${t.name}${t.is_builtin?' (intégré)':''}</option>`).join('');
-}
-
+// ── Step builder ──────────────────────────────────────────────────
 function addStep(label='', toolId='', options='') {
     stepCount++;
     const n = stepCount;
-    const container = document.getElementById('steps-container');
     const div = document.createElement('div');
     div.className = 'step-builder'; div.id = `step-${n}`;
     div.innerHTML = `
         <div class="step-number">ÉTAPE ${n}</div>
         <div style="margin-bottom:0.4rem;">
             <label style="display:block;font-family:'Share Tech Mono',monospace;font-size:0.7rem;color:var(--text-dim);margin-bottom:0.2rem;">Label</label>
-            <input class="step-label" placeholder="ex: Scan des ports" value="${label}" style="margin-bottom:0.4rem;">
+            <input class="step-label" placeholder="ex: Scan des ports" value="${escHtml(label)}" style="margin-bottom:0.4rem;">
         </div>
         <div class="step-row">
             <div>
                 <label style="display:block;font-family:'Share Tech Mono',monospace;font-size:0.7rem;color:var(--text-dim);margin-bottom:0.2rem;">Outil</label>
                 <select class="step-tool" style="margin-bottom:0;">
                     <option value="">Choisir...</option>
-                    ${availableTools.map(t=>`<option value="${t.id}" ${t.id==toolId?'selected':''}>${t.name}</option>`).join('')}
+                    ${availableTools.map(t=>`<option value="${t.id}" ${t.id==toolId?'selected':''}>${escHtml(t.name)}${t.is_builtin?' (intégré)':''}</option>`).join('')}
                 </select>
             </div>
             <div>
                 <label style="display:block;font-family:'Share Tech Mono',monospace;font-size:0.7rem;color:var(--text-dim);margin-bottom:0.2rem;">Options</label>
-                <input class="step-opts" placeholder="Options personnalisées" value="${options}" style="margin-bottom:0;">
+                <input class="step-opts" placeholder="Options personnalisées" value="${escHtml(options)}" style="margin-bottom:0;">
             </div>
             <button class="step-del" onclick="removeStep(${n})">✕</button>
         </div>`;
-    container.appendChild(div);
+    document.getElementById('steps-container').appendChild(div);
 }
 
 function removeStep(n) { document.getElementById(`step-${n}`)?.remove(); }
 
+// ── Create / Edit modal ───────────────────────────────────────────
 function openCreate() {
     document.getElementById('edit-id').value = '';
     document.getElementById('modal-title').textContent = 'CRÉER UN WORKFLOW';
     document.getElementById('f-name').value = '';
     document.getElementById('f-desc').value = '';
     document.getElementById('steps-container').innerHTML = '';
-    stepCount = 0;
-    addStep();
+    stepCount = 0; addStep();
     document.getElementById('modal-overlay').style.display = 'flex';
 }
 
@@ -212,9 +280,8 @@ function openEdit(wf) {
 function closeModal() { document.getElementById('modal-overlay').style.display = 'none'; }
 
 function collectSteps() {
-    const builders = document.querySelectorAll('.step-builder');
     const steps = [];
-    for (const b of builders) {
+    for (const b of document.querySelectorAll('.step-builder')) {
         const label  = b.querySelector('.step-label').value.trim();
         const toolId = b.querySelector('.step-tool').value;
         const opts   = b.querySelector('.step-opts').value.trim();
@@ -225,14 +292,14 @@ function collectSteps() {
 }
 
 async function saveWorkflow() {
-    const id = document.getElementById('edit-id').value;
+    const id   = document.getElementById('edit-id').value;
     const name = document.getElementById('f-name').value.trim();
     const desc = document.getElementById('f-desc').value.trim();
     if (!name) { showToast('Nom requis', 'error'); return; }
     const steps = collectSteps();
     if (steps === null) { showToast('Chaque étape nécessite un label et un outil', 'error'); return; }
-    if (!steps.length) { showToast('Ajoutez au moins une étape', 'error'); return; }
-    const url = id ? `/api/workflows/${id}` : '/api/workflows';
+    if (!steps.length)  { showToast('Ajoutez au moins une étape', 'error'); return; }
+    const url    = id ? `/api/workflows/${id}` : '/api/workflows';
     const method = id ? 'PUT' : 'POST';
     const res = await fetch(url, { method, headers:{'Content-Type':'application/json'}, body:JSON.stringify({name, description:desc, steps}) });
     const d = await res.json();
@@ -241,96 +308,119 @@ async function saveWorkflow() {
     closeModal(); loadWorkflows();
 }
 
+// ── Run target modal ──────────────────────────────────────────────
 function openRunTarget(wfId, wfName) {
-    pendingRunWfId = wfId;
+    pendingRunWfId   = wfId;
+    pendingRunWfName = wfName;
     document.getElementById('run-wf-name').textContent = '> ' + wfName;
     document.getElementById('run-target').value = '';
     document.getElementById('run-target-overlay').style.display = 'flex';
 }
-function closeRunTarget() { document.getElementById('run-target-overlay').style.display = 'none'; pendingRunWfId = null; }
+function closeRunTarget() {
+    document.getElementById('run-target-overlay').style.display = 'none';
+    pendingRunWfId = null; pendingRunWfName = '';
+}
 
 async function confirmRun() {
-    const target = document.getElementById('run-target').value.trim();
+    const target  = document.getElementById('run-target').value.trim();
     if (!target) { showToast('Cible requise', 'error'); return; }
-    const wfId = pendingRunWfId;
+    const wfId   = pendingRunWfId;
+    const wfName = pendingRunWfName;
     closeRunTarget();
-    const res = await fetch(`/api/workflows/${wfId}/run`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({target}) });
+    const res = await fetch(`/api/workflows/${wfId}/run`, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({target})
+    });
     const d = await res.json();
     if (d.error) { showToast(d.error, 'error'); return; }
-    showToast(d.message, 'info');
-    activeRunId = d.run_id;
-    openRunOverlay(target);
+    showToast(`${wfName} lancé en arrière-plan`, 'info');
+    activeRuns.set(d.run_id, { id:d.run_id, wf_name:wfName, target, status:'running', current_step:0, total_steps:0 });
+    updateActivePanel();
+    startGlobalPoll();
     loadWorkflows();
-    startPolling();
 }
 
-function openRunOverlay(target) {
-    document.getElementById('run-overlay').style.display = 'flex';
-    document.getElementById('run-info').textContent = `Cible : ${target}`;
-    document.getElementById('run-steps').innerHTML = '';
-    document.getElementById('run-progress').style.width = '0%';
-    document.getElementById('run-status').textContent = 'Initialisation...';
-    document.getElementById('run-actions').style.display = 'none';
+// ── Global poll (all concurrent runs) ────────────────────────────
+function startGlobalPoll() {
+    if (pollInterval) return;
+    pollInterval = setInterval(pollAllRuns, 1200);
+}
+function stopGlobalPoll() {
+    clearInterval(pollInterval);
+    pollInterval = null;
 }
 
-function closeRunOverlay() {
-    clearInterval(runPollInterval);
-    document.getElementById('run-overlay').style.display = 'none';
-    activeRunId = null; loadWorkflows();
-}
-
-function startPolling() {
-    clearInterval(runPollInterval);
-    runPollInterval = setInterval(pollRun, 1200);
-}
-
-async function pollRun() {
-    if (!activeRunId) { clearInterval(runPollInterval); return; }
-    const res = await fetch(`/api/workflows/runs/${activeRunId}`);
-    const d   = await res.json();
-    if (d.error) { clearInterval(runPollInterval); return; }
-    const pct = d.total_steps > 0 ? Math.round((d.current_step / d.total_steps) * 100) : 0;
-    document.getElementById('run-progress').style.width = pct + '%';
-    const statusLabels = { running:'En cours...', completed:'Terminé ✓', failed:'Échec ✕' };
-    document.getElementById('run-status').textContent = `${statusLabels[d.status]||d.status} — Étape ${d.current_step}/${d.total_steps}`;
-    document.getElementById('run-status').style.color = d.status==='completed'?'var(--accent)':d.status==='failed'?'var(--accent3)':'var(--accent2)';
-
-    const stepsHtml = d.results.map(r => `
-        <div class="run-step">
-            <div class="run-step-label">
-                <span style="color:${r.status==='completed'?'var(--accent)':'var(--accent3)'};">${r.status==='completed'?'✓':'✕'}</span>
-                <span style="margin-left:6px;color:var(--accent2);">Étape ${r.step}</span>
-                <span style="color:var(--text-dim);margin-left:6px;">${r.label} (${r.tool||''})</span>
-            </div>
-            ${r.error ? `<div class="run-step-err">[ERREUR] ${r.error}</div>` : ''}
-            ${r.output ? `<div class="run-step-out">${r.output}</div>` : ''}
-        </div>`).join('');
-    document.getElementById('run-steps').innerHTML = stepsHtml;
-
-    if (d.status !== 'running') {
-        clearInterval(runPollInterval);
-        document.getElementById('run-actions').style.display = 'flex';
-        loadWorkflows();
+async function pollAllRuns() {
+    if (activeRuns.size === 0) { stopGlobalPoll(); updateActivePanel(); return; }
+    const finished = [];
+    for (const [runId] of activeRuns) {
+        try {
+            const res = await fetch(`/api/workflows/runs/${runId}`);
+            const d   = await res.json();
+            if (d.error) { finished.push(runId); continue; }
+            activeRuns.set(runId, d);
+            if (d.status !== 'running') finished.push(runId);
+        } catch(_) {}
     }
+    if (finished.length) {
+        finished.forEach(id => {
+            const r = activeRuns.get(id);
+            if (r) {
+                const labels = { completed:'Terminé ✓', failed:'Échec ✕', stopped:'Arrêté ■' };
+                const types  = { completed:'success', failed:'error', stopped:'info' };
+                showToast(`${r.wf_name} — ${labels[r.status]||r.status}`, types[r.status]||'info');
+            }
+            activeRuns.delete(id);
+        });
+        loadWorkflows();
+        loadRuns();
+    }
+    if (activeRuns.size === 0) stopGlobalPoll();
+    updateActivePanel();
 }
 
-async function deleteWorkflow(id) {
-    closeConfirm();
-    const res = await fetch(`/api/workflows/${id}`, { method:'DELETE' });
-    const d = await res.json();
+// ── Floating panel ────────────────────────────────────────────────
+function togglePanel() {
+    panelCollapsed = !panelCollapsed;
+    document.getElementById('active-panel-body').style.display = panelCollapsed ? 'none' : 'block';
+    document.getElementById('panel-toggle-btn').textContent = panelCollapsed ? '+' : '−';
+}
+
+function updateActivePanel() {
+    const panel = document.getElementById('active-panel');
+    if (activeRuns.size === 0) { panel.style.display = 'none'; return; }
+    panel.style.display = 'block';
+    document.getElementById('active-count').textContent = activeRuns.size;
+    const items = [];
+    for (const [runId, r] of activeRuns) {
+        const pct = r.total_steps > 0 ? Math.round((r.current_step / r.total_steps) * 100) : 0;
+        const sLabel = { running:'En cours...', completed:'Terminé ✓', failed:'Échec ✕', stopped:'Arrêté' }[r.status] || r.status;
+        const sColor = r.status === 'completed' ? 'var(--accent)' : r.status === 'running' ? 'var(--accent2)' : r.status === 'stopped' ? '#e8a000' : 'var(--accent3)';
+        items.push(`
+        <div class="run-item">
+            <div class="run-item-name">${escHtml(r.wf_name||'?')}</div>
+            <div class="run-item-target">${escHtml(r.target||'')} · ${r.current_step||0}/${r.total_steps||0} étapes</div>
+            <div class="mini-progress-wrap"><div class="mini-progress" style="width:${pct}%"></div></div>
+            <div class="run-item-footer">
+                <span class="run-item-status" style="color:${sColor};">${sLabel}</span>
+                ${r.status === 'running' ? `<button class="btn-stop" onclick="stopRun(${runId})">■ Arrêter</button>` : ''}
+            </div>
+        </div>`);
+    }
+    document.getElementById('active-runs-list').innerHTML = items.join('');
+}
+
+async function stopRun(runId) {
+    const res = await fetch(`/api/workflows/runs/${runId}/stop`, { method:'POST' });
+    const d   = await res.json();
     if (d.error) { showToast(d.error, 'error'); return; }
-    showToast(d.message); loadWorkflows();
+    showToast('Arrêt demandé...', 'info');
 }
 
-function askDelete(id, name) {
-    document.getElementById('confirm-msg').textContent = `Supprimer le workflow "${name}" ?`;
-    document.getElementById('confirm-overlay').style.display = 'flex';
-    document.getElementById('confirm-yes').onclick = () => deleteWorkflow(id);
-}
-function closeConfirm() { document.getElementById('confirm-overlay').style.display = 'none'; }
-
+// ── Workflow grid ─────────────────────────────────────────────────
 function statusBadge(status) {
-    if (status==='running') return '<span class="badge badge-running">● En cours</span>';
+    if (status === 'running') return '<span class="badge badge-running">● En cours</span>';
     return '<span class="badge badge-idle">○ Inactif</span>';
 }
 
@@ -346,17 +436,17 @@ async function loadWorkflows() {
         </div>`; return;
     }
     grid.innerHTML = wfs.map(wf => {
-        const steps = JSON.parse(wf.steps || '[]');
+        const steps     = JSON.parse(wf.steps || '[]');
         const isRunning = wf.status === 'running';
         return `
         <div class="wf-card">
             <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:0.4rem;">
-                <div class="wf-name">${wf.name}</div>
+                <div class="wf-name">${escHtml(wf.name)}</div>
                 ${statusBadge(wf.status)}
             </div>
-            <div class="wf-desc">${wf.description || 'Aucune description.'}</div>
+            <div class="wf-desc">${escHtml(wf.description || 'Aucune description.')}</div>
             <div style="margin-bottom:0.75rem;">
-                ${steps.map((s,i)=>`<span class="step-tag">${i+1}. ${s.label}</span>`).join('')}
+                ${steps.map((s,i)=>`<span class="step-tag">${i+1}. ${escHtml(s.label)}</span>`).join('')}
                 ${!steps.length ? '<span style="font-family:\'Share Tech Mono\',monospace;font-size:0.72rem;color:var(--text-dim);">(aucune étape)</span>' : ''}
             </div>
             <div style="font-family:'Share Tech Mono',monospace;font-size:0.7rem;color:var(--text-dim);margin-bottom:0.75rem;">
@@ -371,6 +461,99 @@ async function loadWorkflows() {
     }).join('');
 }
 
-loadTools().then(loadWorkflows);
+// ── Runs history ──────────────────────────────────────────────────
+function runStatusBadge(status) {
+    const m = { running:['En cours','status-running'], completed:['Terminé ✓','status-completed'], failed:['Échec ✕','status-failed'], stopped:['Arrêté','status-stopped'] };
+    const [lbl, cls] = m[status] || [status, 'status-failed'];
+    return `<span class="status-badge ${cls}">${lbl}</span>`;
+}
+
+function fmtDate(s) {
+    return s ? s.replace('T',' ').slice(0,16) : '—';
+}
+
+function fmtDuration(start, end) {
+    if (!start || !end) return '';
+    const s = Math.round((new Date(end) - new Date(start)) / 1000);
+    return s < 60 ? `${s}s` : `${Math.floor(s/60)}m${s%60}s`;
+}
+
+function toggleDetail(id) {
+    const el = document.getElementById(`detail-${id}`);
+    if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+async function loadRuns() {
+    const res  = await fetch('/api/workflows/runs');
+    const runs = await res.json();
+    const section = document.getElementById('runs-section');
+    const list    = document.getElementById('runs-list');
+    const badge   = document.getElementById('runs-count-badge');
+    if (!Array.isArray(runs) || !runs.length) { section.style.display = 'none'; return; }
+    section.style.display = 'block';
+    badge.textContent = `(${runs.length})`;
+    list.innerHTML = runs.map(r => {
+        const results = Array.isArray(r.results) ? r.results : JSON.parse(r.results || '[]');
+        const dur     = fmtDuration(r.started_at, r.finished_at);
+        const stepsHtml = results.map(step => `
+            <div class="run-step-item">
+                <div class="run-step-label">
+                    <span style="color:${step.status==='completed'?'var(--accent)':'var(--accent3)'};">${step.status==='completed'?'✓':'✕'}</span>
+                    <span style="margin-left:6px;color:var(--accent2);">Étape ${step.step}</span>
+                    <span style="color:var(--text-dim);margin-left:6px;">${escHtml(step.label||'')}${step.tool?' ('+escHtml(step.tool)+')':''}</span>
+                </div>
+                ${step.error  ? `<div class="run-step-err">[ERREUR] ${escHtml(step.error)}</div>`       : ''}
+                ${step.output ? `<div class="run-step-out">${escHtml(step.output)}</div>` : ''}
+            </div>`).join('');
+        return `
+        <div class="run-row" onclick="toggleDetail(${r.id})">
+            <div class="run-row-main">
+                ${runStatusBadge(r.status)}
+                <div class="run-row-name">${escHtml(r.wf_name||'?')}</div>
+                <div class="run-row-target">→ ${escHtml(r.target||'')}</div>
+                <div class="run-row-meta">${r.current_step}/${r.total_steps} étapes${dur?' · '+dur:''} · ${fmtDate(r.started_at)}</div>
+            </div>
+            <div class="run-detail" id="detail-${r.id}">
+                ${stepsHtml || '<div style="font-family:\'Share Tech Mono\',monospace;font-size:0.75rem;color:var(--text-dim);">Aucun résultat enregistré.</div>'}
+            </div>
+        </div>`;
+    }).join('');
+}
+
+// ── Delete ────────────────────────────────────────────────────────
+async function deleteWorkflow(id) {
+    closeConfirm();
+    const res = await fetch(`/api/workflows/${id}`, { method:'DELETE' });
+    const d   = await res.json();
+    if (d.error) { showToast(d.error, 'error'); return; }
+    showToast(d.message); loadWorkflows(); loadRuns();
+}
+
+function askDelete(id, name) {
+    document.getElementById('confirm-msg').textContent = `Supprimer le workflow "${name}" ?`;
+    document.getElementById('confirm-overlay').style.display = 'flex';
+    document.getElementById('confirm-yes').onclick = () => deleteWorkflow(id);
+}
+function closeConfirm() { document.getElementById('confirm-overlay').style.display = 'none'; }
+
+// ── Restore active runs on page load ─────────────────────────────
+async function checkActiveOnLoad() {
+    try {
+        const res  = await fetch('/api/workflows/runs');
+        const runs = await res.json();
+        if (!Array.isArray(runs)) return;
+        for (const r of runs) {
+            if (r.status === 'running') activeRuns.set(r.id, r);
+        }
+        if (activeRuns.size > 0) { updateActivePanel(); startGlobalPoll(); }
+    } catch(_) {}
+}
+
+// ── Init ──────────────────────────────────────────────────────────
+loadTools().then(() => {
+    loadWorkflows();
+    loadRuns();
+    checkActiveOnLoad();
+});
 </script>
 {% endblock %}
