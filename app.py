@@ -1,6 +1,7 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_file
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_file, abort
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
+from functools import wraps
 import sqlite3, os, socket, re, hashlib, base64, urllib.parse, html, json, ipaddress, struct
 import threading, time
 from datetime import datetime
@@ -33,6 +34,19 @@ def init_db():
         CREATE TABLE IF NOT EXISTS workflow_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, workflow_id INTEGER, user_id INTEGER, target TEXT NOT NULL, status TEXT DEFAULT 'running', current_step INTEGER DEFAULT 0, total_steps INTEGER DEFAULT 0, results TEXT DEFAULT '[]', started_at TEXT DEFAULT (datetime('now')), finished_at TEXT);
     ''')
     db.commit()
+    # ── Migration RBAC : ajout des colonnes role / active ─────────────────
+    cols = [r['name'] for r in db.execute("PRAGMA table_info(users)").fetchall()]
+    if 'role' not in cols:
+        db.execute("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'")
+    if 'active' not in cols:
+        db.execute("ALTER TABLE users ADD COLUMN active INTEGER NOT NULL DEFAULT 1")
+    db.commit()
+    # Bootstrap : si aucun admin n'existe, promouvoir le premier utilisateur
+    if db.execute("SELECT COUNT(*) FROM users WHERE role='admin'").fetchone()[0] == 0:
+        first = db.execute("SELECT id FROM users ORDER BY id ASC LIMIT 1").fetchone()
+        if first:
+            db.execute("UPDATE users SET role='admin' WHERE id=?", (first['id'],))
+            db.commit()
     existing = db.execute("SELECT COUNT(*) FROM scan_tools WHERE is_builtin=1").fetchone()[0]
     if existing == 0:
         builtins = [
@@ -48,15 +62,46 @@ def init_db():
 init_db()
 
 class User(UserMixin):
-    def __init__(self, id, username):
-        self.id = id; self.username = username
+    def __init__(self, id, username, role='user', active=1):
+        self.id       = id
+        self.username = username
+        self.role     = role
+        self.active   = bool(active)
+
+    @property
+    def is_admin(self):
+        return self.role == 'admin'
+
+    @property
+    def is_tech(self):
+        return self.role in ('admin', 'tech')
+
 
 @login_manager.user_loader
 def load_user(user_id):
     db = get_db()
-    u = db.execute('SELECT * FROM users WHERE id=?', (user_id,)).fetchone()
+    u  = db.execute('SELECT * FROM users WHERE id=?', (user_id,)).fetchone()
     db.close()
-    return User(u['id'], u['username']) if u else None
+    if not u or not u['active']:
+        return None
+    return User(u['id'], u['username'], u['role'], u['active'])
+
+def role_required(*roles):
+    """Bloque avec 403 si le rôle de l'utilisateur connecté n'est pas dans la liste."""
+    def decorator(view_func):
+        @wraps(view_func)
+        def wrapped(*args, **kwargs):
+            if not current_user.is_authenticated:
+                return login_manager.unauthorized()
+            if current_user.role not in roles:
+                abort(403)
+            return view_func(*args, **kwargs)
+        return wrapped
+    return decorator
+
+admin_required = role_required('admin')
+tech_required  = role_required('admin', 'tech')
+
 
 def save_history(tool, inp, out):
     if current_user.is_authenticated:
@@ -85,7 +130,12 @@ def inject_nav():
             nav.append({'url': _url_for(endpoint), 'label': label, 'endpoint': endpoint})
         except Exception:
             pass
-    return {'nav_links': nav}
+    if current_user.is_authenticated and current_user.role == 'admin':
+        try:
+            nav.append({'url': _url_for('admin_page'), 'label': 'Administration', 'endpoint': 'admin_page'})
+        except Exception:
+            pass
+    return {'nav_links': nav, 'current_role': getattr(current_user, 'role', None)}
 
 @app.route('/')
 def index():
@@ -100,7 +150,10 @@ def login():
         u = db.execute('SELECT * FROM users WHERE username=?', (username,)).fetchone()
         db.close()
         if u and check_password_hash(u['password'], password):
-            login_user(User(u['id'], u['username']))
+            if not u['active']:
+                flash("Ce compte a été désactivé. Contactez un administrateur.")
+                return render_template('login.html')
+            login_user(User(u['id'], u['username'], u['role'], u['active']))
             return redirect(url_for('dashboard'))
         flash('Identifiants incorrects.')
     return render_template('login.html')
@@ -128,7 +181,10 @@ def register():
         else:
             try:
                 db = get_db()
-                db.execute('INSERT INTO users (username, password) VALUES (?,?)', (username, generate_password_hash(password)))
+                existing_count = db.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+                role = 'admin' if existing_count == 0 else 'user'
+                db.execute('INSERT INTO users (username, password, role) VALUES (?,?,?)',
+                           (username, generate_password_hash(password), role))
                 db.commit(); db.close()
                 flash('Compte créé. Connectez-vous.')
                 return redirect(url_for('login'))
@@ -271,6 +327,7 @@ def api_check_tool():
 
 @app.route('/api/install-tool', methods=['POST'])
 @login_required
+@tech_required
 def api_install_tool():
     """
     Installe un paquet avec confirmation explicite de l'utilisateur.
@@ -306,6 +363,8 @@ def api_scan_tools():
         db.close()
         return jsonify([dict(t) for t in tools])
 
+    if not current_user.is_tech:
+        db.close(); return jsonify({'error': 'Accès refusé : rôle tech ou admin requis'}), 403
     data    = request.json
     name    = data.get('name','').strip()
     command = data.get('command','').strip()
@@ -346,6 +405,8 @@ def api_scan_tool(tool_id):
         db.close(); return jsonify({'error': 'Outil introuvable'}), 404
     if request.method == 'GET':
         db.close(); return jsonify(dict(tool))
+    if not current_user.is_tech:
+        db.close(); return jsonify({'error': 'Accès refusé : rôle tech ou admin requis'}), 403
     if tool['is_builtin']:
         db.close(); return jsonify({'error': 'Les outils integres ne peuvent pas etre modifies'}), 403
     if tool['user_id'] != current_user.id:
@@ -409,6 +470,7 @@ def api_scan(scan_id):
 
 @app.route('/api/scans/launch', methods=['POST'])
 @login_required
+@tech_required
 def api_scan_launch():
     data = request.json
     tool_id = data.get('tool_id'); target = data.get('target','').strip(); options = data.get('options','').strip()
@@ -755,6 +817,7 @@ def api_workflow(wf_id):
 
 @app.route('/api/workflows/<int:wf_id>/run', methods=['POST'])
 @login_required
+@tech_required
 def api_workflow_run(wf_id):
     db = get_db()
     wf = db.execute('SELECT * FROM workflows WHERE id=? AND user_id=?', (wf_id, current_user.id)).fetchone()
@@ -1068,6 +1131,74 @@ def api_report_pdf():
     )
     filename = f'rapport_acmd_{current_user.username}_{datetime.now().strftime("%Y%m%d_%H%M")}.pdf'
     return send_file(pdf_buffer, mimetype='application/pdf', as_attachment=True, download_name=filename)
+
+
+@app.route('/admin')
+@login_required
+@admin_required
+def admin_page():
+    db = get_db()
+    users = db.execute('SELECT id, username, role, active, created_at FROM users ORDER BY id').fetchall()
+    db.close()
+    return render_template('admin.html', users=users)
+
+
+@app.route('/api/admin/users/<int:user_id>/role', methods=['PUT'])
+@login_required
+@admin_required
+def api_admin_set_role(user_id):
+    role = (request.json or {}).get('role', '').strip()
+    if role not in ('admin', 'tech', 'user'):
+        return jsonify({'error': 'Rôle invalide (admin, tech, user)'}), 400
+    if user_id == current_user.id and role != 'admin':
+        return jsonify({'error': 'Vous ne pouvez pas retirer votre propre rôle admin'}), 400
+    db = get_db()
+    target = db.execute('SELECT * FROM users WHERE id=?', (user_id,)).fetchone()
+    if not target:
+        db.close(); return jsonify({'error': 'Utilisateur introuvable'}), 404
+    db.execute('UPDATE users SET role=? WHERE id=?', (role, user_id))
+    db.commit(); db.close()
+    return jsonify({'ok': True, 'message': f'Rôle de {target["username"]} mis à jour : {role}'})
+
+
+@app.route('/api/admin/users/<int:user_id>/active', methods=['PUT'])
+@login_required
+@admin_required
+def api_admin_set_active(user_id):
+    active = 1 if (request.json or {}).get('active', True) else 0
+    if user_id == current_user.id and not active:
+        return jsonify({'error': 'Vous ne pouvez pas désactiver votre propre compte'}), 400
+    db = get_db()
+    target = db.execute('SELECT * FROM users WHERE id=?', (user_id,)).fetchone()
+    if not target:
+        db.close(); return jsonify({'error': 'Utilisateur introuvable'}), 404
+    db.execute('UPDATE users SET active=? WHERE id=?', (active, user_id))
+    db.commit(); db.close()
+    state = 'activé' if active else 'désactivé'
+    return jsonify({'ok': True, 'message': f'Compte {target["username"]} {state}'})
+
+
+@app.route('/api/admin/users/<int:user_id>', methods=['DELETE'])
+@login_required
+@admin_required
+def api_admin_delete_user(user_id):
+    if user_id == current_user.id:
+        return jsonify({'error': 'Vous ne pouvez pas supprimer votre propre compte'}), 400
+    db = get_db()
+    target = db.execute('SELECT * FROM users WHERE id=?', (user_id,)).fetchone()
+    if not target:
+        db.close(); return jsonify({'error': 'Utilisateur introuvable'}), 404
+    db.execute('DELETE FROM users WHERE id=?', (user_id,))
+    for table in ('history', 'notes', 'scans', 'workflows', 'workflow_runs', 'scan_tools'):
+        db.execute(f'DELETE FROM {table} WHERE user_id=?', (user_id,))
+    db.commit(); db.close()
+    return jsonify({'ok': True, 'message': f'Compte {target["username"]} supprimé'})
+
+
+@app.errorhandler(403)
+def forbidden(_):
+    flash("Accès refusé : votre rôle ne permet pas cette action.")
+    return redirect(url_for('dashboard')), 403
 
 
 if __name__ == '__main__':

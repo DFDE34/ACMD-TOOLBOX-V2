@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% block title %}Administration — ACMD Toolbox{% endblock %}
+{% block content %}
+<div style="max-width:900px;margin:2rem auto;">
+
+  <h1 style="font-family:'Orbitron',monospace;font-size:1rem;letter-spacing:4px;color:var(--accent);font-weight:400;margin-bottom:0.3rem;">
+    // <span style="font-weight:900;">ADMINISTRATION</span>
+  </h1>
+  <p style="font-family:'Share Tech Mono',monospace;font-size:0.78rem;color:var(--text-dim);margin-bottom:1.5rem;">
+    Gestion des rôles et des accès. Réservé aux administrateurs.
+  </p>
+
+  <p id="admin-msg" style="display:none;padding:0.6rem 0.9rem;font-family:'Share Tech Mono',monospace;font-size:0.8rem;margin-bottom:1rem;border:1px solid;"></p>
+
+  <table style="width:100%;border-collapse:collapse;font-family:'Share Tech Mono',monospace;font-size:0.8rem;">
+    <thead>
+      <tr style="background:var(--bg3);color:var(--accent2);text-align:left;border-bottom:1px solid var(--border);">
+        <th style="padding:0.6rem 0.8rem;">Utilisateur</th>
+        <th style="padding:0.6rem 0.8rem;">Rôle</th>
+        <th style="padding:0.6rem 0.8rem;">Statut</th>
+        <th style="padding:0.6rem 0.8rem;">Créé le</th>
+        <th style="padding:0.6rem 0.8rem;">Actions</th>
+      </tr>
+    </thead>
+    <tbody id="users-tbody">
+      {% for u in users %}
+      <tr data-id="{{ u.id }}" style="border-bottom:1px solid var(--border);">
+        <td style="padding:0.6rem 0.8rem;font-weight:600;color:var(--text);">
+          {{ u.username }}
+          {% if u.id == current_user.id %}
+            <span style="color:var(--text-dim);font-size:0.68rem;">(vous)</span>
+          {% endif %}
+        </td>
+        <td style="padding:0.6rem 0.8rem;">
+          <select class="role-select"
+                  {% if u.id == current_user.id %}disabled{% endif %}
+                  style="background:var(--bg2);color:var(--text);border:1px solid var(--border);
+                         padding:0.25rem 0.5rem;font-family:'Share Tech Mono',monospace;font-size:0.78rem;">
+            <option value="user"  {% if u.role == 'user'  %}selected{% endif %}>user</option>
+            <option value="tech"  {% if u.role == 'tech'  %}selected{% endif %}>tech</option>
+            <option value="admin" {% if u.role == 'admin' %}selected{% endif %}>admin</option>
+          </select>
+        </td>
+        <td style="padding:0.6rem 0.8rem;">
+          <span class="status-badge"
+                style="color:{{ '#00ff88' if u.active else '#ff3366' }};font-weight:600;">
+            {{ 'actif' if u.active else 'désactivé' }}
+          </span>
+        </td>
+        <td style="padding:0.6rem 0.8rem;color:var(--text-dim);font-size:0.75rem;">
+          {{ (u.created_at or '')[:16] }}
+        </td>
+        <td style="padding:0.6rem 0.8rem;display:flex;gap:0.4rem;">
+          <button class="toggle-active-btn"
+                  {% if u.id == current_user.id %}disabled{% endif %}
+                  style="padding:0.25rem 0.6rem;background:var(--bg3);color:var(--text);
+                         border:1px solid var(--border);cursor:pointer;
+                         font-family:'Share Tech Mono',monospace;font-size:0.75rem;">
+            {{ 'Désactiver' if u.active else 'Activer' }}
+          </button>
+          <button class="delete-btn"
+                  {% if u.id == current_user.id %}disabled{% endif %}
+                  style="padding:0.25rem 0.6rem;background:rgba(255,51,102,0.1);
+                         color:var(--accent3);border:1px solid var(--accent3);
+                         cursor:pointer;font-family:'Share Tech Mono',monospace;font-size:0.75rem;">
+            Supprimer
+          </button>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div style="margin-top:2rem;background:rgba(0,204,255,0.05);border:1px solid rgba(0,204,255,0.2);
+              padding:0.75rem 1rem;font-family:'Share Tech Mono',monospace;font-size:0.75rem;color:var(--accent2);">
+    ℹ Rôles : <b>admin</b> = accès total + gestion des comptes &nbsp;|&nbsp;
+    <b>tech</b> = lancer des scans, workflows, outils &nbsp;|&nbsp;
+    <b>user</b> = consultation uniquement (Fast Tools, historique, rapport)
+  </div>
+</div>
+
+<script>
+function showMsg(text, ok) {
+  const el = document.getElementById('admin-msg');
+  el.textContent = text;
+  el.style.background = ok ? 'rgba(0,255,136,0.08)' : 'rgba(255,51,102,0.08)';
+  el.style.color       = ok ? 'var(--accent)'       : 'var(--accent3)';
+  el.style.borderColor = ok ? 'var(--accent)'       : 'var(--accent3)';
+  el.style.display = 'block';
+  setTimeout(() => { el.style.display = 'none'; }, 5000);
+}
+
+document.querySelectorAll('.role-select').forEach(sel => {
+  sel.addEventListener('change', async function () {
+    const id = this.closest('tr').dataset.id;
+    try {
+      const res  = await fetch(`/api/admin/users/${id}/role`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role: this.value })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      showMsg(data.message, true);
+    } catch (err) { showMsg(err.message, false); }
+  });
+});
+
+document.querySelectorAll('.toggle-active-btn').forEach(btn => {
+  btn.addEventListener('click', async function () {
+    const row    = this.closest('tr');
+    const id     = row.dataset.id;
+    const badge  = row.querySelector('.status-badge');
+    const isActive = badge.textContent.trim() === 'actif';
+    try {
+      const res  = await fetch(`/api/admin/users/${id}/active`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ active: !isActive })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      showMsg(data.message, true);
+      badge.textContent    = isActive ? 'désactivé' : 'actif';
+      badge.style.color    = isActive ? 'var(--accent3)' : 'var(--accent)';
+      this.textContent     = isActive ? 'Activer' : 'Désactiver';
+    } catch (err) { showMsg(err.message, false); }
+  });
+});
+
+document.querySelectorAll('.delete-btn').forEach(btn => {
+  btn.addEventListener('click', async function () {
+    const row      = this.closest('tr');
+    const id       = row.dataset.id;
+    const username = row.querySelector('td').textContent.trim().split('\n')[0].trim();
+    if (!confirm(`Supprimer définitivement le compte "${username}" et toutes ses données ?`)) return;
+    try {
+      const res  = await fetch(`/api/admin/users/${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      showMsg(data.message, true);
+      row.remove();
+    } catch (err) { showMsg(err.message, false); }
+  });
+});
+</script>
+{% endblock %}
