@@ -299,10 +299,6 @@ ACMD-TOOLBOX-V2/
 | Variable | Défaut | Description |
 |----------|--------|-------------|
 | `DB_PATH` | `toolbox.db` | Chemin de la base SQLite (Docker : `/app/data/toolbox.db`) |
-| `HOST` | `0.0.0.0` | Adresse d'écoute (run.py) |
-| `PORT` | `5000` | Port d'écoute (run.py) |
-| `WORKERS` | `2` | Workers Gunicorn — Linux uniquement (run.py) |
-| `TIMEOUT` | `120` | Timeout worker en secondes — Linux uniquement (run.py) |
 
 ---
 
