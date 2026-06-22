@@ -95,10 +95,6 @@ docker compose up -d --build
 
 L'application est accessible sur **http://localhost:5000**
 
-### 3. Créer le compte administrateur
-
-Rendez-vous sur **http://localhost:5000** — vous serez redirigé vers `/setup` pour créer le compte admin initial.
-
 ---
 
 ### Commandes Docker utiles
