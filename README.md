@@ -286,17 +286,6 @@ Exécuté  : nikto -h 192.168.1.1 -Tuning 1
 
 ---
 
-## Workflows
-
-Les workflows enchaînent plusieurs outils sur une même cible.  
-L'exécution se fait **en arrière-plan** — vous pouvez naviguer, lancer d'autres scans ou d'autres workflows pendant l'exécution.
-
-- Un **panneau flottant** (bas-droit) affiche les exécutions actives avec barre de progression
-- Le bouton **Arrêter** interrompt un workflow en cours proprement
-- Les résultats de toutes les exécutions sont visibles directement sur la page Workflows
-
----
-
 ## Structure du projet
 
 ```
