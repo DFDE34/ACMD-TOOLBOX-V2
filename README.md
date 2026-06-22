@@ -95,6 +95,8 @@ docker compose up -d --build
 
 L'application est accessible sur **http://localhost:5000**
 
+> La base de données est persistée via un volume Docker. La variable `DB_PATH` (défaut : `/app/data/toolbox.db`) contrôle son emplacement dans le conteneur.
+
 ---
 
 ### Commandes Docker utiles
@@ -291,14 +293,6 @@ ACMD-TOOLBOX-V2/
     ├── report.html         # Rapport PDF
     └── owasp.html          # OWASP Top 10
 ```
-
----
-
-## Variables d'environnement
-
-| Variable | Défaut | Description |
-|----------|--------|-------------|
-| `DB_PATH` | `toolbox.db` | Chemin de la base SQLite (Docker : `/app/data/toolbox.db`) |
 
 ---
 
