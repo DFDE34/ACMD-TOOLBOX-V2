@@ -213,28 +213,6 @@ L'inscription peut être activée ou désactivée depuis la page **Administratio
 
 ---
 
-## Lanceur run.py
-
-`run.py` est utilisé **uniquement en déploiement local** (pas Docker). Il choisit automatiquement le bon serveur selon la plateforme :
-
-| Plateforme | Serveur | Commande |
-|------------|---------|----------|
-| Linux / Kali / macOS | Gunicorn (2 workers, 4 threads) | `python3 run.py` |
-| Windows | Flask dev (threaded) | `python run.py` ou `python app.py` |
-
-> En **Docker**, c'est `docker-entrypoint.sh` qui gère le démarrage — il lance Gunicorn directement sans passer par `run.py`.
-
-Variables d'environnement disponibles (déploiement local uniquement) :
-
-| Variable | Défaut | Description |
-|----------|--------|-------------|
-| `HOST` | `0.0.0.0` | Adresse d'écoute |
-| `PORT` | `5000` | Port |
-| `WORKERS` | `2` | Workers Gunicorn (Linux uniquement) |
-| `TIMEOUT` | `120` | Timeout worker en secondes (Linux uniquement) |
-
----
-
 ## Outils pré-installés dans l'image Docker
 
 | Outil | Catégorie | Usage |
