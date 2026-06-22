@@ -76,49 +76,6 @@ Accès : **http://localhost:5000**
 
 ---
 
-## Premier déploiement — Compte administrateur
-
-Au premier lancement, **aucun compte n'existe**. L'application redirige automatiquement vers `/setup` pour créer le compte administrateur initial.
-
-Cette page est **inaccessible** une fois le premier compte créé.
-
-Les comptes suivants créés via `/register` reçoivent le rôle **pending** par défaut — l'administrateur doit leur attribuer un rôle depuis la page **Administration**.
-
----
-
-## Gestion des rôles (RBAC)
-
-| Rôle | Accès |
-|------|-------|
-| `admin` | Accès complet + page Administration (gestion des utilisateurs et rôles) |
-| `tech` | Scans, Workflows, Outils, Historique, Rapport PDF, Fast Tools |
-| `user` | Fast Tools, Historique, Rapport PDF, OWASP Top 10 |
-| `pending` | Aucun accès — en attente d'attribution de rôle par un admin |
-
-L'inscription peut être activée ou désactivée depuis la page **Administration**.
-
----
-
-## Lanceur run.py
-
-`run.py` choisit automatiquement le bon serveur selon la plateforme :
-
-| Plateforme | Serveur | Commande |
-|------------|---------|----------|
-| Linux / Kali / macOS | Gunicorn (2 workers, 4 threads) | `python3 run.py` |
-| Windows | Flask dev (threaded) | `python run.py` ou `python app.py` |
-
-Variables d'environnement disponibles :
-
-| Variable | Défaut | Description |
-|----------|--------|-------------|
-| `HOST` | `0.0.0.0` | Adresse d'écoute |
-| `PORT` | `5000` | Port |
-| `WORKERS` | `2` | Workers Gunicorn (Linux uniquement) |
-| `TIMEOUT` | `120` | Timeout worker en secondes (Linux uniquement) |
-
----
-
 ## Déploiement — Docker
 
 > Méthode recommandée. L'image embarque Kali Linux avec tous les outils pentest pré-installés.
@@ -234,6 +191,49 @@ networks:
 docker compose up -d
 docker exec -it acmd-toolbox nmap -sV 172.20.0.10
 ```
+
+---
+
+## Premier déploiement — Compte administrateur
+
+Au premier lancement (quelle que soit la méthode), **aucun compte n'existe**. L'application redirige automatiquement vers `/setup` pour créer le compte administrateur initial.
+
+Cette page est **inaccessible** une fois le premier compte créé.
+
+Les comptes suivants créés via `/register` reçoivent le rôle **pending** par défaut — l'administrateur doit leur attribuer un rôle depuis la page **Administration**.
+
+---
+
+## Gestion des rôles (RBAC)
+
+| Rôle | Accès |
+|------|-------|
+| `admin` | Accès complet + page Administration (gestion des utilisateurs et rôles) |
+| `tech` | Scans, Workflows, Outils, Historique, Rapport PDF, Fast Tools |
+| `user` | Fast Tools, Historique, Rapport PDF, OWASP Top 10 |
+| `pending` | Aucun accès — en attente d'attribution de rôle par un admin |
+
+L'inscription peut être activée ou désactivée depuis la page **Administration**.
+
+---
+
+## Lanceur run.py
+
+`run.py` choisit automatiquement le bon serveur selon la plateforme :
+
+| Plateforme | Serveur | Commande |
+|------------|---------|----------|
+| Linux / Kali / macOS | Gunicorn (2 workers, 4 threads) | `python3 run.py` |
+| Windows | Flask dev (threaded) | `python run.py` ou `python app.py` |
+
+Variables d'environnement disponibles :
+
+| Variable | Défaut | Description |
+|----------|--------|-------------|
+| `HOST` | `0.0.0.0` | Adresse d'écoute |
+| `PORT` | `5000` | Port |
+| `WORKERS` | `2` | Workers Gunicorn (Linux uniquement) |
+| `TIMEOUT` | `120` | Timeout worker en secondes (Linux uniquement) |
 
 ---
 
